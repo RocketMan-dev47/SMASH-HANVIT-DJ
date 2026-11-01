@@ -1,0 +1,102 @@
+# SMASH 한빛
+
+대전한빛고등학교를 3D로 부수는 시험기간 스트레스 해소 게임입니다. 학교와 관계없는 비공식 팬 게임입니다.
+
+[SMASH 대학교](https://hong-iron.github.io/SMASH/)에서 아이디어를 얻었고, 코드와 디자인은 처음부터 새로 만들었습니다.
+
+## 실행하기
+
+```
+cd ~/Projects/SMASH-HANVIT
+python3 -m http.server 8000
+```
+
+브라우저에서 `http://localhost:8000`을 엽니다. `index.html`을 더블클릭하면 안 열려요.
+`data/campus.json`이 없으면 연습용 가상 학교가 나옵니다.
+
+## 우리 학교 데이터 만들기
+
+```
+pip3 install pillow
+python3 tools/fetch_campus.py find 한빛
+python3 tools/fetch_campus.py build --way 번호
+```
+
+## 무기
+
+| 키 | 무기 | 하는 일 |
+| --- | --- | --- |
+| 1 | 폭탄 | 누른 곳이 바로 터져요 |
+| 2 | 배트 | 오렌지·블랙 거대 배트로 휘둘러요. 크기 S~XL 선택, 크게 맞으면 홈런! |
+| 3 | 레이저 | 누른 채로 끌면 추진기로 떠 있는 테슬라 로드스터(스타맨 탑승)가 레이저를 쏴요 |
+| 4 | 운석 | 우주(약 4 km 위)에서부터 불타며 떨어져요. 우주 어딘가에 작은 외계인이 있어요 |
+| 5 | 지진 | 진도 Ⅳ~Ⅹ 선택. 진앙거리·진원거리·PS시·오모리 공식이 담긴 관측 카드와 지진계 기록이 떠요 |
+| 6 | 산사태 | 비탈 위에서 바위가 굴러 내려와요 |
+| 7 | 로켓 | HFV-1(실제 설계 치수)을 1.5 km 떨어진 HASA 발사장에서 쏴요. 2단은 분리 후 잠깐 관성 비행했다가 점화해요. SpaceX식 중계 화면, 1단은 발사탑 팔이 붙잡아 다시 써요 |
+| 8 | 핵폭탄 | 위치 지정 패드(미니맵)나 화면에서 목표를 찍고 발사 → 3초 경보 뒤 떨어져 버섯구름이 피어올라요 (Enter로도 발사). KF-21이 날아와 투하해요 |
+
+운석·핵폭탄·로켓은 카메라가 무기를 따라가요. 화면을 누르거나 Esc를 누르면 건너뛰고, 카메라 버튼으로 끌 수 있어요.
+오른쪽 아래 나침반을 누르면 북쪽이 위로 오게 돌아가요.
+
+다시 짓기를 누르면 화면이 옆으로 접히듯 넘어가며 새 학교가 펼쳐져요.
+
+레이저를 고른 동안에는 화면 이동을 오른쪽 버튼(휴대폰은 두 손가락)으로 해요. N은 밤입니다.
+
+## 설정 (config.json)
+
+- `exams`: 시험 이름, 시작일 `date`, 마지막 날 `end`. 마지막 날 다음 날에는 운동장에서 불꽃놀이가 열려요. 미리 보려면 주소 끝에 `?fireworks`를 붙이세요.
+- 시험 날짜: **지금 날짜는 예시**라서 학사일정으로 바꿔 주세요. 시험 2주 전부터 점수가 조금씩 올라요.
+- `launchSite`: 로켓 발사장 위치 `[x, z]`(m). 비워 두면 학교에서 북동쪽 1.5 km에 생겨요.
+- `golfCart`: `false`면 학교를 도는 골프 카트를 숨겨요.
+- `showLogo`: `false`면 학교 로고를 숨겨요.
+- `buildings`: 건물별 `name`, `levels`, `style`(`cream`, `white`, `brick`, `gray`, `glass`), `roof`, `hide`
+- `bell`: 1등급과 미션 완료 때 울리는 종소리(Hz)
+
+## 학년 대항 (전교 점수판)
+
+설정이 없으면 이 기기 기록만 보여요. 친구들 점수를 모으려면 다음처럼 해요.
+
+1. supabase.com에서 무료 프로젝트를 만들어요.
+2. SQL Editor에 `supabase/schema.sql`을 붙여 넣고 Run을 눌러요.
+3. Project Settings → API에서 Project URL과 공개 키(anon/publishable)를 `config.json`의 `supabaseUrl`, `supabaseKey`에 넣어요.
+
+secret 키(service_role)는 절대 넣지 마세요.
+
+## 데이터와 출처
+
+- 건물·길·녹지: © OpenStreetMap 기여자, [ODbL](https://www.openstreetmap.org/copyright). `data/campus.json`도 ODbL을 따릅니다.
+- 땅 높이: AWS Terrain Tiles (SRTM 기반)
+- 3D: [three.js](https://threejs.org) (MIT), 글꼴: [Pretendard](https://github.com/orioncactus/pretendard) (OFL)
+- 학교 로고와 교훈은 대전한빛고등학교의 것입니다.
+
+## 휴대폰에서 하기
+
+- 같은 와이파이: 아이맥에서 서버를 켠 채로 `ipconfig getifaddr en0`(안 나오면 `en1`)로 주소를 알아내고, 휴대폰에서 `http://그주소:8000`을 열어요.
+- 어디서나: GitHub에 올리고 Settings → Pages에서 `main` / `(root)`로 켜면 `https://아이디.github.io/저장소이름/`으로 열려요.
+- 한 손가락 끌기는 이동, 두 손가락은 돌리기·확대, 톡 누르면 공격이에요. 공유 버튼 → 홈 화면에 추가하면 앱처럼 꽉 찬 화면으로 열려요.
+
+## 달력과 특별 에디션
+
+왼쪽 아래 달력 버튼(또는 시험·수능 칩)을 누르면 달력이 열리고, 날짜를 골라 그날로 이동할 수 있어요.
+
+- 시험이 끝난 다음 날: 운동장 불꽃놀이
+- 12월 24·25일: 크리스마스 에디션(건물 조명과 지붕 눈, 트리, 루돌프 썰매, 선물상자 폭탄, 트리 로켓)
+- 수능 날: 수능 응원 에디션
+- 주소 끝에 `?xmas`나 `?fireworks`를 붙이면 바로 미리 볼 수 있어요.
+- `suneung`(수능 날짜 목록), `anniversaries`(`[{"name": "개교기념일", "date": "MM-DD"}]`)를 config.json에 넣을 수 있어요.
+
+별 모양 버튼은 오늘의 학습운세예요. 누를 때마다 행운의 과목·장소·아이템과 응원 한마디가 새로 나와요.
+
+## 빠진 건물 그려 넣기 (배치 도우미)
+
+주소를 `localhost:8000/?edit`로 열면 오른쪽에 배치 도우미가 떠요.
+
+1. 건물 모서리를 땅에서 차례로 눌러요(3개 이상).
+2. 이름·층수·외벽을 고르고 "건물로 저장"을 눌러요.
+3. 국기게양대는 그 자리를 한 번 누른 뒤 "마지막 점에 국기게양대"를 눌러요.
+4. "복사하기"를 누르고 config.json의 `"buildings"` 바로 위에 붙여 넣은 뒤 새로고침해요.
+
+## 인터넷 링크로 열기 (GitHub Pages)
+
+터미널 없이 누구나 링크로 열 수 있게 하려면 GitHub에 올리고 Settings → Pages에서 `main` / `(root)`를 고르세요.
+주소는 `https://아이디.github.io/저장소이름/`이에요. 고친 뒤에는 `git add . && git commit -m "업데이트" && git push`만 하면 1~2분 뒤 반영돼요.

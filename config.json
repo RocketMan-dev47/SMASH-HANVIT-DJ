@@ -1,0 +1,227 @@
+{
+  "title": "SMASH 한빛",
+  "school": "대전한빛고등학교",
+  "showLogo": true,
+  "logo": "assets/emblem.svg",
+  "floorHeight": 3.6,
+  "roofColor": "#a9adb1",
+  "bell": [
+    659.25,
+    523.25,
+    587.33,
+    392.0
+  ],
+  "exams": [
+    {
+      "name": "기말고사",
+      "date": "2026-12-08",
+      "end": "2026-12-11"
+    }
+  ],
+  "suneung": [
+    "2026-11-19",
+    "2027-11-18"
+  ],
+  "launchSite": null,
+  "golfCart": true,
+  "supabaseUrl": "",
+  "supabaseKey": "",
+  "buildings": {
+    "w1228972445": {
+      "name": "본관",
+      "levels": 4,
+      "style": "salmon"
+    },
+    "w1228972446": {
+      "name": "인재원 Ⅰ",
+      "levels": 5,
+      "style": "salmon"
+    },
+    "w1228972451": {
+      "name": "문화관",
+      "levels": 4,
+      "style": "white"
+    },
+    "w1228972450": {
+      "name": "미래관",
+      "levels": 3,
+      "style": "gray",
+      "roof": "#8d9399",
+      "shape": "barrel"
+    },
+    "w1228972444": {
+      "name": "와우관",
+      "levels": 4,
+      "style": "whiteblue"
+    }
+  },
+  "flag": {
+    "at": [
+      34.8,
+      -22.6
+    ],
+    "height": 35,
+    "size": [
+      8,
+      5.3
+    ]
+  },
+  "extraBuildings": [
+    {
+      "name": "인재원 Ⅱ",
+      "levels": 3,
+      "style": "stone",
+      "roof": "#4a4f55",
+      "shape": "gable",
+      "poly": [
+        [
+          -1.2,
+          -68.6
+        ],
+        [
+          -10.6,
+          -86.2
+        ],
+        [
+          -0.8,
+          -91.4
+        ],
+        [
+          8.6,
+          -73.8
+        ]
+      ]
+    },
+    {
+      "name": "더라운지",
+      "levels": 2,
+      "style": "white",
+      "roof": "#5d6268",
+      "shape": "gable",
+      "poly": [
+        [
+          30.4,
+          -30.2
+        ],
+        [
+          24.8,
+          -40.8
+        ],
+        [
+          32.8,
+          -45.0
+        ],
+        [
+          38.4,
+          -34.4
+        ]
+      ]
+    },
+    {
+      "name": "하모니홀",
+      "levels": 1,
+      "style": "brick",
+      "roof": "#4a4f55",
+      "shape": "gable",
+      "poly": [
+        [
+          -16.9,
+          -29.3
+        ],
+        [
+          -22.1,
+          -39.0
+        ],
+        [
+          -15.1,
+          -42.7
+        ],
+        [
+          -9.9,
+          -33.0
+        ]
+      ]
+    },
+    {
+      "name": "세심정",
+      "levels": 1,
+      "style": "wood",
+      "roof": "#6b4a33",
+      "shape": "hip",
+      "poly": [
+        [
+          -88.0,
+          52.0
+        ],
+        [
+          -82.0,
+          52.0
+        ],
+        [
+          -82.0,
+          58.0
+        ],
+        [
+          -88.0,
+          58.0
+        ]
+      ]
+    }
+  ],
+  "canopies": [
+    {
+      "name": "아트플라자",
+      "center": [
+        -4,
+        -26
+      ],
+      "size": [
+        11,
+        11
+      ],
+      "angle": -118,
+      "colors": [
+        "#e8452c",
+        "#f6c445",
+        "#f08a24",
+        "#d8282f"
+      ]
+    },
+    {
+      "name": "스포츠플라자",
+      "center": [
+        -36,
+        -14
+      ],
+      "size": [
+        10,
+        8
+      ],
+      "angle": 40,
+      "colors": [
+        "#f6c445",
+        "#e8452c",
+        "#2f6fe0",
+        "#ffffff"
+      ]
+    },
+    {
+      "name": "에듀플라자",
+      "center": [
+        38,
+        100
+      ],
+      "size": [
+        12,
+        10
+      ],
+      "angle": -30,
+      "colors": [
+        "#2fb0c6",
+        "#f6c445",
+        "#2f6fe0",
+        "#ffffff"
+      ]
+    }
+  ]
+}
