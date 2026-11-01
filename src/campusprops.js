@@ -24,54 +24,150 @@ export function pickStandEdge(pitch, mainPoly) {
 }
 
 // 스탠드가 차지하는 땅(나무를 안 심으려고)
-export function standFootprint(e) {
-  const len = e.L * 0.78, d0 = 1.2, d1 = 11.5;
+export const STEP = { rise: 0.5, depth: 1.2 };
+export function standSteps(fieldY, backY) {
+  return Math.max(4, Math.min(24, Math.round((backY - fieldY) / STEP.rise)));
+}
+export function standFootprint(e, N = 7) {
+  const len = e.L * 0.78 + 7, d0 = 1.2, d1 = 1.6 + N * STEP.depth + 0.6;
   const P = (u, v) => [e.mx + e.tx * u + e.nx * v, e.mz + e.tz * u + e.nz * v];
   return [P(-len / 2, d0), P(len / 2, d0), P(len / 2, d1), P(-len / 2, d1)];
 }
 
-// 운동장에서 본관 쪽으로 올라가는 계단식 스탠드 + 흰 아치 지붕
-export function buildStands(scene, terrain, pitch, mainPoly) {
-  const best = pickStandEdge(pitch, mainPoly);
-  if (!best) return null;
-  const { L, tx, tz, nx, nz, mx, mz } = best;
-  const fieldY = terrain.heightAt(mx - nx * 3, mz - nz * 3);
-  const ang = Math.atan2(tz, tx);
+// 운동장에서 본관 쪽 높이까지 올라가는 계단식 스탠드 + 옆 계단 + 흰 아치 지붕
+export function buildStands(scene, e, fieldY, N) {
+  const { L, tx, tz, nx, nz, mx, mz } = e;
   const g = new THREE.Group();
-  const steps = [];
-  const N = 7, depth = 1.3, rise = 0.45, len = L * 0.78;
+  const { rise, depth } = STEP;
+  const len = L * 0.78;
+  const seats = [], risers = [];
   for (let k = 0; k < N; k++) {
     const top = fieldY + rise * (k + 1);
     const h = top - (fieldY - 3);
     const box = new THREE.BoxGeometry(len, h, depth);
     box.translate(0, top - h / 2, 1.6 + k * depth + depth / 2);
-    steps.push(box);
+    (k % 2 ? seats : risers).push(box);
   }
-  const stepMesh = new THREE.Mesh(merge(steps), new THREE.MeshStandardMaterial({ color: 0x9a5240, roughness: 0.85 }));
-  stepMesh.castShadow = stepMesh.receiveShadow = true;
-  g.add(stepMesh);
+  const brick = new THREE.MeshStandardMaterial({ color: 0x9a5240, roughness: 0.85 });
+  const brick2 = new THREE.MeshStandardMaterial({ color: 0xa96150, roughness: 0.85 });
+  for (const [list, m] of [[seats, brick], [risers, brick2]]) {
+    const mesh = new THREE.Mesh(merge(list), m);
+    mesh.castShadow = mesh.receiveShadow = true;
+    g.add(mesh);
+  }
+  // 옆 계단(회색 콘크리트): 운동장에서 위쪽까지 가파르게
+  const stairs = [];
+  const sr = 0.18, sn = Math.round((rise * N) / sr), sp = (N * depth) / sn;
+  for (let k = 0; k < sn; k++) {
+    const top = fieldY + sr * (k + 1);
+    const h = top - (fieldY - 3);
+    const box = new THREE.BoxGeometry(3.6, h, sp);
+    box.translate(len / 2 + 2.2, top - h / 2, 1.6 + k * sp + sp / 2);
+    stairs.push(box);
+  }
+  const stairMesh = new THREE.Mesh(merge(stairs), new THREE.MeshStandardMaterial({ color: 0xb9b6ae, roughness: 0.9 }));
+  stairMesh.castShadow = stairMesh.receiveShadow = true;
+  g.add(stairMesh);
   // 흰 아치 지붕(막 구조): 스탠드 가운데를 덮어요.
-  const span = N * depth + 1.5, R = span / 2;
-  const arch = new THREE.CylinderGeometry(R, R, len * 0.4, 32, 1, true, 0, Math.PI);
+  const span = Math.min(10, N * depth * 0.55), R = span / 2;
+  const arch = new THREE.CylinderGeometry(R, R, len * 0.35, 32, 1, true, 0, Math.PI);
   arch.rotateZ(Math.PI / 2);
   arch.scale(1, 0.75, 1);
+  const zMid = 1.6 + span / 2;
+  const yBase = fieldY + rise * (span / depth) + 1.6;
   const roof = new THREE.Mesh(arch, new THREE.MeshStandardMaterial({ color: 0xf6f7f8, roughness: 0.4, side: THREE.DoubleSide, transparent: true, opacity: 0.95 }));
-  roof.position.set(0, fieldY + rise * N * 0.5 + 1.4, 1.6 + span / 2 - 0.8);
+  roof.position.set(0, yBase, zMid);
   roof.castShadow = true;
   g.add(roof);
   const ribMat = new THREE.MeshStandardMaterial({ color: 0xc8cdd2, roughness: 0.4, metalness: 0.6 });
-  for (const x of [-len * 0.2, 0, len * 0.2]) {
+  for (const x of [-len * 0.17, 0, len * 0.17]) {
     const rib = new THREE.Mesh(new THREE.TorusGeometry(R, 0.08, 6, 24, Math.PI), ribMat);
     rib.rotation.y = Math.PI / 2;
     rib.scale.set(1, 0.75, 1);
-    rib.position.set(x, roof.position.y, roof.position.z);
+    rib.position.set(x, yBase, zMid);
     g.add(rib);
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, yBase - fieldY, 8), ribMat);
+    leg.position.set(x, (yBase + fieldY) / 2, zMid - R);
+    g.add(leg);
   }
   g.position.set(mx, 0, mz);
-  // 그룹의 +z가 운동장 바깥(본관 쪽)을 향하도록 돌려요.
   g.rotation.y = Math.atan2(nx, nz);
   scene.add(g);
-  return { group: g, edge: best, angle: ang };
+  return g;
+}
+
+// 아트플라자에서 미래관 쪽으로 단차를 두고 흐르는 물길 + 끝의 작은 연못
+export class Stream {
+  constructor(scene, terrain, fx, { path, width = 2.2, drop = 0.45, pond = [5, 3.4] }) {
+    this.fx = fx;
+    this.t = 0;
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.fillStyle = '#3f8fb5';
+    g.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 70; i++) {
+      g.strokeStyle = `rgba(255,255,255,${0.12 + Math.random() * 0.2})`;
+      g.lineWidth = 1 + Math.random() * 1.5;
+      const y = Math.random() * 128, x = Math.random() * 128;
+      g.beginPath(); g.moveTo(x, y); g.bezierCurveTo(x + 10, y - 4, x + 20, y + 4, x + 30, y); g.stroke();
+    }
+    this.tex = new THREE.CanvasTexture(c);
+    this.tex.wrapS = this.tex.wrapT = THREE.RepeatWrapping;
+    this.tex.colorSpace = THREE.SRGBColorSpace;
+    const water = new THREE.MeshStandardMaterial({ map: this.tex, transparent: true, opacity: 0.88, roughness: 0.08, metalness: 0.2 });
+    const stone = new THREE.MeshStandardMaterial({ color: 0x8b8780, roughness: 0.95, flatShading: true });
+    this.falls = [];
+    const group = new THREE.Group();
+    const pts = path;
+    const n = pts.length - 1;
+    const baseY = Math.min(...pts.map(([x, z]) => terrain.heightAt(x, z)));
+    for (let i = 0; i < n; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+      const lvl = baseY + 0.25 + (n - 1 - i) * drop + (i === n - 1 ? 0 : 0);
+      const cx = (a[0] + b[0]) / 2, cz = (a[1] + b[1]) / 2;
+      const w = i === n - 1 ? pond[1] : width, len = i === n - 1 ? Math.max(L, pond[0]) : L;
+      // 돌 테두리(아래까지 채워서 떠 보이지 않게)
+      const h = lvl - (baseY - 1) + 0.25;
+      const rim = new THREE.Mesh(new THREE.BoxGeometry(len + 0.6, h, w + 0.8), stone);
+      rim.position.set(cx, baseY - 1 + h / 2 - 0.12, cz);
+      rim.rotation.y = -ang;
+      rim.castShadow = rim.receiveShadow = true;
+      group.add(rim);
+      const surf = new THREE.Mesh(new THREE.PlaneGeometry(len, w).rotateX(-Math.PI / 2), water);
+      surf.position.set(cx, lvl + 0.02, cz);
+      surf.rotation.y = -ang;
+      group.add(surf);
+      if (i < n - 1) {
+        // 다음 칸으로 떨어지는 작은 폭포
+        const fall = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.8, drop + 0.1), water);
+        fall.position.set(b[0], lvl - drop / 2 + 0.02, b[1]);
+        fall.rotation.y = -ang + Math.PI / 2;
+        group.add(fall);
+        this.falls.push(new THREE.Vector3(b[0], lvl - drop + 0.1, b[1]));
+      }
+    }
+    // 물이 나오는 돌 수구
+    const [sx, sz] = pts[0];
+    const spout = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 1.2), stone);
+    spout.position.set(sx, baseY + 0.25 + (n - 1) * drop + 0.5, sz);
+    group.add(spout);
+    scene.add(group);
+    this.group = group;
+  }
+
+  update(dt) {
+    this.t += dt;
+    this.tex.offset.set(this.t * 0.25, this.t * 0.05);
+    if (Math.random() < 0.5) {
+      for (const p of this.falls) {
+        this.fx.smoke.spawn(p.x + (Math.random() - 0.5) * 0.8, p.y, p.z + (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.6, 0.6, (Math.random() - 0.5) * 0.6,
+          new THREE.Color('#eaf6ff'), 0.35, 0.5, { grow: 0.6, drag: 2, alpha: 0.7 });
+      }
+    }
+  }
 }
 
 // 운동장 둘레 공 막이 그물(초록 철망)

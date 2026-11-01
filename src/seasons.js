@@ -33,6 +33,7 @@ const FALL = {
   spring: { n: 2600, colors: ['#ffd6e5', '#f9c0d6', '#ffe9f1', '#f4a9c6', '#ffffff'], size: 0.42, speed: [0.6, 1.4], sway: 1.6, petal: 1 },
   autumn: { n: 1900, colors: ['#e0601e', '#f2a43a', '#c6371f', '#e8c13a', '#a8541c'], size: 0.55, speed: [1.0, 2.0], sway: 1.3, petal: 1 },
   winter: { n: 5200, colors: ['#ffffff', '#f2f6fb', '#e8f0fa'], size: 0.42, speed: [1.6, 3.6], sway: 0.35, petal: 0 },
+  rain: { n: 4200, colors: ['#b8cfe6', '#d6e4f2', '#9fbad6'], size: 0.55, speed: [24, 30], sway: 0, petal: 2 },
 };
 
 // 카메라 바로 앞(12~45 m)에서는 흐려져서 시야를 가리지 않아요. 꽃잎·잎은 납작하게 돌면서 떨어져요.
@@ -54,9 +55,13 @@ uniform float uPetal;
 varying vec3 vColor; varying float vAlpha; varying float vSpin;
 void main() {
   vec2 p = gl_PointCoord - 0.5;
-  float c = cos(vSpin), s = sin(vSpin);
-  p = vec2(c * p.x - s * p.y, s * p.x + c * p.y);
-  p.y *= mix(1.0, 1.9 + 0.8 * sin(vSpin * 1.7), uPetal);
+  if (uPetal > 1.5) {
+    p.x *= 7.0; // 빗줄기: 가늘고 길게
+  } else {
+    float c = cos(vSpin), s = sin(vSpin);
+    p = vec2(c * p.x - s * p.y, s * p.x + c * p.y);
+    p.y *= mix(1.0, 1.9 + 0.8 * sin(vSpin * 1.7), uPetal);
+  }
   float a = 1.0 - smoothstep(0.32, 0.5, length(p));
   a *= vAlpha;
   if (a < 0.02) discard;
@@ -82,8 +87,21 @@ export class Seasons {
     const spots = (w.trees.items?.broad || []).map((t) => [t.x, t.z, t.s]);
     w.painter.setSeason(season, spots);
     w.buildings.setSnow(season === 'winter' || !!w.xmasOn);
-    this.setFall(noFall ? null : FALL[season]);
+    this.noFall = noFall;
+    this.setFall(noFall ? null : FALL[this.weatherFall() || season]);
     if (changed && !quiet) w.ui.toast(`${SEASON_NAME[season]}`, SEASON_TEXT[season]);
+  }
+
+  // 실시간 날씨: 비가 오면 비, 눈이 오면 눈(계절보다 먼저)
+  weatherFall() {
+    if (this.weather === 'rain' || this.weather === 'storm') return 'rain';
+    if (this.weather === 'snow') return 'winter';
+    return null;
+  }
+
+  setWeather(kind) {
+    this.weather = kind;
+    if (this.season && !this.noFall) this.setFall(FALL[this.weatherFall() || this.season]);
   }
 
   setScale(px) {

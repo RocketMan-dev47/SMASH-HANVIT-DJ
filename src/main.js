@@ -23,7 +23,14 @@ import { drawFortune } from './fortune.js';
 import { FlagPole } from './flag.js';
 import { Seasons, seasonOf } from './seasons.js';
 import { Canopies } from './props.js';
-import { buildStands, buildFence, buildTurtleRock, buildFossil, pickStandEdge, standFootprint } from './campusprops.js';
+import { buildStands, buildFence, buildTurtleRock, buildFossil, pickStandEdge, standFootprint, standSteps, Stream } from './campusprops.js';
+import { RoboDog } from './robodog.js';
+import { Cats } from './cats.js';
+import { Extras, storeSign } from './extras.js';
+import { fetchWeather } from './weather.js';
+import { fetchMeals } from './meal.js';
+import { makeShareCard } from './share.js';
+import { pointInPolygon, distToPolygonEdge } from './geom.js';
 import { Editor } from './editor.js';
 import { Fireworks } from './fireworks.js';
 import { makeDemoCampus } from './demo.js';
@@ -123,6 +130,19 @@ async function start() {
     const hs = poly.map(([x, z]) => terrain.heightAt(x, z));
     terrain.flatten(poly, hs.reduce((s, v) => s + v, 0) / hs.length, 8);
   }
+  // 운동장에서 본관 쪽 높이까지 올라가는 스탠드: 자리를 운동장 높이로 파고, 계단이 뒤쪽 땅 높이까지 올라가요.
+  const bigPitch = (campus.areas || []).filter((a) => a.kind === 'pitch').map((a) => cleanPolygon(a.poly)).sort((a, b) => signedArea(b) - signedArea(a))[0];
+  const mainB = bdata.find((b) => b.name === '본관') || [...bdata].sort((a, b) => signedArea(b.poly) - signedArea(a.poly))[0];
+  const standEdge = bigPitch && mainB ? pickStandEdge(bigPitch, mainB.poly) : null;
+  let stand = null;
+  if (standEdge) {
+    const pcen = centroid(bigPitch);
+    const fieldY = terrain.heightAt(pcen[0], pcen[1]);
+    const backY = terrain.heightAt(standEdge.mx + standEdge.nx * 24, standEdge.mz + standEdge.nz * 24);
+    const N = standSteps(fieldY, backY);
+    stand = { e: standEdge, fieldY, N, poly: standFootprint(standEdge, N) };
+    terrain.flatten(stand.poly, fieldY, 1.2);
+  }
   for (const d of bdata) terrain.flatten(d.poly, d.base, 1.5);
 
   const painter = new GroundPainter(terrain, quality === 'high' ? 4096 : 2048);
@@ -166,10 +186,9 @@ async function start() {
   // 차양막 자리에는 나무를 심지 않아요.
   const canopySpots = (cfg.canopies || []).map((c) => ({ poly: rectPoly(c) }));
   // 스탠드 자리(운동장에서 본관을 바라보는 변)도 비워 둬요.
-  const bigPitch = (campus.areas || []).filter((a) => a.kind === 'pitch').map((a) => cleanPolygon(a.poly)).sort((a, b) => signedArea(b) - signedArea(a))[0];
-  const mainB = bdata.find((b) => b.name === '본관') || [...bdata].sort((a, b) => signedArea(b.poly) - signedArea(a.poly))[0];
-  const standEdge = bigPitch && mainB ? pickStandEdge(bigPitch, mainB.poly) : null;
-  if (standEdge) canopySpots.push({ poly: standFootprint(standEdge) });
+  if (stand) canopySpots.push({ poly: stand.poly });
+  // 물길 자리도 비워요.
+  for (const [x, z] of cfg.stream?.path || []) canopySpots.push({ poly: [[x - 3.5, z - 3.5], [x + 3.5, z - 3.5], [x + 3.5, z + 3.5], [x - 3.5, z + 3.5]] });
   trees.plan(campus, [...bdata, ...canopySpots], quality === 'high' ? 2200 : 1000, quality === 'high' ? 480 : 240, quality === 'high' ? 900 : 380);
   trees.build();
   const score = new Score();
@@ -306,10 +325,42 @@ async function start() {
   }
   const seasons = new Seasons(world);
   // 운동장 스탠드·그물, 거북바위, 지층 화석
-  if (bigPitch && mainB) {
-    buildStands(scene, terrain, bigPitch, mainB.poly);
-    buildFence(scene, terrain, bigPitch, standEdge ? standEdge.i : null);
+  if (stand) buildStands(scene, stand.e, stand.fieldY, stand.N);
+  if (bigPitch) buildFence(scene, terrain, bigPitch, standEdge ? standEdge.i : null);
+  const stream = cfg.stream?.path ? new Stream(scene, terrain, fx, cfg.stream) : null;
+  const robodog = new RoboDog(world);
+
+  // 고양이(흰 엄마 + 새끼 3, 치즈), 매점 잭팟, 시험지 눈보라
+  const extras = new Extras(world);
+  const whiteAt = stand
+    ? [stand.e.mx + stand.e.nx * (1.6 + stand.N * 1.2 + 6), stand.e.mz + stand.e.nz * (1.6 + stand.N * 1.2 + 6)]
+    : [focus[0] + 10, focus[1]];
+  const pondEnd = cfg.stream?.path?.[cfg.stream.path.length - 1];
+  const cheeseAt = pondEnd ? [pondEnd[0] + 3, pondEnd[1] + 4] : [focus[0] - 10, focus[1]];
+  const cats = new Cats(world, { white: whiteAt, cheese: cheeseAt });
+  const catMeshes = cats.meshes();
+  // 본관 1층 매점(운동장 쪽 벽 가운데)
+  let store = null;
+  if (mainB && bigPitch) {
+    const pc = centroid(bigPitch);
+    let best = null;
+    for (let i = 0; i < mainB.poly.length; i++) {
+      const a = mainB.poly[i], b = mainB.poly[(i + 1) % mainB.poly.length];
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (L < 8) continue;
+      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+      const d = Math.hypot(mx - pc[0], mz - pc[1]);
+      if (!best || d < best.d) best = { a, b, L, mx, mz, d };
+    }
+    if (best) {
+      let nx = (best.b[1] - best.a[1]) / best.L, nz = -(best.b[0] - best.a[0]) / best.L;
+      if ((pc[0] - best.mx) * nx + (pc[1] - best.mz) * nz < 0) { nx = -nx; nz = -nz; }
+      store = new THREE.Vector3(best.mx + nx * 0.35, mainB.base + 2.8, best.mz + nz * 0.35);
+      storeSign(scene, store, Math.atan2(nx, nz));
+    }
   }
+  let jackpotDone = false;
+  const examPeriod = () => { const e = nextExam(cfg.exams, simDate); return !!e && (e.during || e.days <= 14); };
   const shrine = bdata.find((b) => b.name === '세심정');
   const turtleAt = cfg.turtleRock?.at || (shrine ? [centroid(shrine.poly)[0] - 20, centroid(shrine.poly)[1] + 18] : null);
   const turtle = turtleAt ? buildTurtleRock(scene, terrain, turtleAt, shrine ? centroid(shrine.poly) : focus) : null;
@@ -346,6 +397,7 @@ async function start() {
   const toolRadius = (t) => (t.id === 'quake' ? quakeParams(tools.intensity).R : t.id === 'bat' ? BAT_SIZES[tools.batSize - 1].R : t.R);
   function selectTool(id) {
     tools.holdEnd();
+    if (typeof robodog !== 'undefined' && robodog.active && id !== 'robodog') robodog.stop(camera);
     tool = TOOL_DEFS.find((t) => t.id === id) || TOOL_DEFS[0];
     ui.setTool(tool.id);
     reticle.scale.setScalar(toolRadius(tool));
@@ -361,13 +413,24 @@ async function start() {
   selectTool('bomb');
 
   let gradeOneDone = false;
+  let lastRes = { volume: 0 };
   const stats = { trees: 0 };
   function explode(P, o) {
     const R = o.R, power = o.power;
     const res = buildings.blast(P, R, power);
+    lastRes = res;
     const treesDown = trees.blast(P, R * 1.1);
     const cartHit = cart ? cart.blast(P, R, power) : false;
     canopies?.blast(P, R);
+    cats.scare(P, R);
+    if (store && !jackpotDone && P.distanceTo(store) < R + 4) {
+      jackpotDone = true;
+      extras.jackpot(store);
+      sound.jackpot();
+      const p = score.add(5000);
+      ui.toast('매점 털었다!', `바나나우유·초코파이 잭팟 +${fmt(p)}`, 'gold');
+    }
+    if (lastRes.volume > (o.quiet ? 120 : 20) && examPeriod()) extras.examPapers(P, lastRes.volume);
     if (o.fx !== false) fx.explosion(P, R, { flash: o.flash ?? 1 });
     if (world.edition === 'xmas' && (o.tool === 'bomb' || o.tool === 'meteor' || (o.tool === 'rocket' && R > 10))) xmas.gifts.burst(P, R > 12 ? 18 : 10);
     const g = terrain.heightAt(P.x, P.z);
@@ -441,33 +504,68 @@ async function start() {
   }
 
   const dom = renderer.domElement;
+  let longTimer = null, longPressed = false;
+  const buildingAt = (P) => {
+    for (const b of buildings.list) if (pointInPolygon([P.x, P.z], b.poly)) return b;
+    let best = null, bd = 3;
+    for (const b of buildings.list) { const d = distToPolygonEdge([P.x, P.z], b.poly); if (d < bd) { bd = d; best = b; } }
+    return best;
+  };
+  const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
+  async function openMeal() {
+    const t = `${simDate.getMonth() + 1}월 ${simDate.getDate()}일 ${WEEK[simDate.getDay()]}요일 급식`;
+    ui.showMeal(t, null);
+    try { ui.showMeal(t, await fetchMeals(cfg, simDate)); } catch (err) { ui.showMeal(t, [], err.message || '인터넷 연결을 확인해 주세요'); }
+  }
   const pointers = new Set();
   let down = null;
   let hover = null;
   let holding = false;
   dom.addEventListener('pointerdown', (e) => {
+    if (robodog.active) return;
     if (director.busy) { director.skip(); down = null; return; }
     pointers.add(e.pointerId);
     if (pointers.size > 1) { down = null; if (holding) { tools.holdEnd(); holding = false; } return; }
     down = { x: e.clientX, y: e.clientY, t: performance.now(), b: e.button };
+    // 꾹 누르기(0.65초): 미래관(급식실)이면 급식 메뉴
+    clearTimeout(longTimer);
+    const d0 = down;
+    longTimer = setTimeout(() => {
+      if (down !== d0 || holding) return;
+      const P = pick(d0.x, d0.y);
+      const b = P && buildingAt(P);
+      if (b && /미래관|식당|급식/.test(b.name)) { longPressed = true; down = null; openMeal(); }
+    }, 650);
     if (tool.hold && e.button === 0) {
       const P = pick(e.clientX, e.clientY);
       if (P) { sound.ensure(); tools.holdStart(P); holding = true; }
     }
   });
   dom.addEventListener('pointermove', (e) => {
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) clearTimeout(longTimer);
     if (e.pointerType === 'mouse') hover = [e.clientX, e.clientY];
     if (holding) tools.holdMove(pick(e.clientX, e.clientY));
   });
   dom.addEventListener('pointerup', (e) => {
     pointers.delete(e.pointerId);
+    clearTimeout(longTimer);
+    if (longPressed) { longPressed = false; down = null; return; }
     if (holding) { tools.holdEnd(); holding = false; down = null; return; }
     if (!down) return;
     const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
     if (down.b === 0 && moved < 8 && performance.now() - down.t < 450 && !tool.hold) {
       sound.ensure();
+      // 고양이를 누르면 쓰다듬어요(무기는 안 나가요).
+      {
+        const r = renderer.domElement.getBoundingClientRect();
+        ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+        ray.setFromCamera(ndc, camera);
+        const ch = ray.intersectObjects(catMeshes, false)[0];
+        if (ch) { cats.pet(ch.object.userData.cat); down = null; return; }
+      }
       const P = pick(e.clientX, e.clientY);
-      if (P && editor) editor.add(P);
+      if (P && tool.id === 'robodog') { sound.ensure(); director.skip(); robodog.start(P, controls, camera); ui.toast('로봇개 조종 시작', device === 'desktop' ? 'WASD로 움직이고 Space로 화염, Esc로 나가요' : '왼쪽 조이스틱으로 움직이고 화염 버튼을 눌러요'); }
+      else if (P && editor) editor.add(P);
       else if (P && tool.id === 'nuke') nukePad.setTarget(P);
       else if (P) tools.fire(tool, P);
     }
@@ -479,6 +577,11 @@ async function start() {
 
   addEventListener('keydown', (e) => {
     if (e.target.closest && e.target.closest('input, textarea')) return;
+    if (robodog.active) {
+      if (e.code === 'Escape') { robodog.stop(camera); return; }
+      if (robodog.key(e.code, true)) e.preventDefault();
+      return;
+    }
     if (!document.getElementById('sheet').hidden) return;
     const i = Number(e.key) - 1;
     if (TOOL_DEFS[i]) selectTool(TOOL_DEFS[i].id);
@@ -487,8 +590,52 @@ async function start() {
     if (e.key === 'Escape') director.skip();
   });
 
+  addEventListener('keyup', (e) => { if (robodog.active) robodog.key(e.code, false); });
+
+  // ---------- 로봇개 조이스틱·화염 버튼 ----------
+  {
+    const stick = document.getElementById('dog-stick'), knob = document.getElementById('dog-knob'), fire = document.getElementById('dog-fire');
+    let sid = null;
+    const moveStick = (e) => {
+      const r = stick.getBoundingClientRect();
+      let x = (e.clientX - (r.left + r.width / 2)) / (r.width / 2), y = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+      const l = Math.hypot(x, y);
+      if (l > 1) { x /= l; y /= l; }
+      knob.style.transform = `translate(${x * r.width * 0.3}px, ${y * r.height * 0.3}px)`;
+      robodog.input.x = Math.abs(x) > 0.15 ? x : 0;
+      robodog.input.y = Math.abs(y) > 0.15 ? -y : 0;
+    };
+    stick.addEventListener('pointerdown', (e) => { sid = e.pointerId; stick.setPointerCapture(sid); moveStick(e); });
+    stick.addEventListener('pointermove', (e) => { if (e.pointerId === sid) moveStick(e); });
+    const endStick = (e) => { if (e.pointerId !== sid) return; sid = null; knob.style.transform = ''; robodog.input.x = robodog.input.y = 0; };
+    stick.addEventListener('pointerup', endStick);
+    stick.addEventListener('pointercancel', endStick);
+    fire.addEventListener('pointerdown', (e) => { fire.setPointerCapture(e.pointerId); fire.classList.add('on'); robodog.setFlame(true); });
+    const endFire = () => { fire.classList.remove('on'); robodog.setFlame(false); };
+    fire.addEventListener('pointerup', endFire);
+    fire.addEventListener('pointercancel', endFire);
+    document.getElementById('dog-exit').addEventListener('click', () => robodog.stop(camera));
+  }
+
   // ---------- 밤 ----------
   let night = false;
+  let wx = null;
+  // 비·흐림이면 해가 약해져요.
+  function setLights() {
+    const dim = wx && /rain|storm|fog|cloud/.test(wx.kind) ? (wx.kind === 'cloud' ? 0.7 : 0.45) : 1;
+    hemi.intensity = (night ? 0.55 : 1.35) * (0.6 + 0.4 * dim);
+    sun.intensity = (night ? 0.8 : 3.1) * dim;
+  }
+  async function applyWeather() {
+    const today = simDate.toDateString() === new Date().toDateString();
+    wx = null;
+    if (today && cfg.weather !== false) {
+      try { wx = await fetchWeather(campus.origin?.lat ?? 36.2808, campus.origin?.lon ?? 127.3733); } catch { wx = null; }
+    }
+    ui.setWeather(wx);
+    seasons.setWeather(wx?.kind || null);
+    setLights();
+  }
   function toggleNight() {
     night = !night;
     const C = night ? NIGHT : DAY;
@@ -500,6 +647,7 @@ async function start() {
     sun.intensity = night ? 0.8 : 3.1;
     sun.color.set(night ? 0xaabcff : 0xfff0d8);
     renderer.toneMappingExposure = night ? 1.2 : 1.05;
+    setLights();
     buildings.setNight(night);
     document.getElementById('btn-night').setAttribute('aria-pressed', String(night));
   }
@@ -518,6 +666,11 @@ async function start() {
     cart?.reset();
     xmas.rebuilt();
     canopies.reset();
+    if (robodog.active) robodog.stop(camera);
+    robodog.reset();
+    extras.clear();
+    cats.reset();
+    jackpotDone = false;
     fx.clear();
     score.reset();
     ui.reset();
@@ -581,7 +734,7 @@ async function start() {
   }
   function travel(date) {
     simDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12);
-    foldRebuild(() => applyEdition(true));
+    foldRebuild(() => { applyEdition(true); applyWeather(); });
   }
   const calendar = new CalendarUI({ cfg, events, getDate: () => simDate, onTravel: travel });
   for (const id of ['btn-calendar', 'exam-chip', 'suneung-chip', 'edition-chip']) document.getElementById(id).addEventListener('click', () => calendar.open());
@@ -609,6 +762,59 @@ async function start() {
     controls.target.copy(home.target);
   });
   addEventListener('pagehide', () => board.finishRun());
+
+  // ---------- 기기별 화면 ----------
+  let device = 'desktop';
+  const applyDevice = () => {
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    const short = Math.min(innerWidth, innerHeight);
+    device = short < 600 ? 'phone' : (coarse || innerWidth < 1100) ? 'tablet' : 'desktop';
+    ui.setDevice(device);
+  };
+  applyDevice();
+  addEventListener('resize', applyDevice);
+  document.getElementById('btn-panel').addEventListener('click', () => document.body.classList.toggle('panel-open'));
+  document.getElementById('btn-more').addEventListener('click', () => document.body.classList.toggle('more-open'));
+  dom.addEventListener('pointerdown', () => document.body.classList.remove('panel-open', 'more-open'));
+
+  // ---------- 후원 ----------
+  document.getElementById('btn-donate').addEventListener('click', () => ui.showDonate(cfg));
+  document.getElementById('dn-close').addEventListener('click', () => ui.hideDonate());
+  document.getElementById('donate').addEventListener('click', (e) => { if (e.target.id === 'donate') ui.hideDonate(); });
+  document.getElementById('meal-close').addEventListener('click', () => ui.modal('meal', false));
+  document.getElementById('meal').addEventListener('click', (e) => { if (e.target.id === 'meal') ui.modal('meal', false); });
+
+  // ---------- 인스타 공유 카드 ----------
+  document.getElementById('btn-share').addEventListener('click', () => {
+    renderer.render(scene, camera);
+    const shot = document.createElement('canvas');
+    shot.width = renderer.domElement.width; shot.height = renderer.domElement.height;
+    shot.getContext('2d').drawImage(renderer.domElement, 0, 0);
+    const card = makeShareCard(shot, {
+      score: fmt(score.score), grade: score.bestGrade, pct: `${Math.round(buildings.destroyedFraction() * 100)}%`,
+      bldg: `${buildings.list.filter((b) => b.collapsed || b.lostFraction() > 0.9).length}/${buildings.list.length}`,
+      date: `${simDate.getFullYear()}.${simDate.getMonth() + 1}.${simDate.getDate()}`,
+      edition: world.edition ? EDITIONS[world.edition].title : '', school: schoolName, url: location.href.split('?')[0],
+    });
+    ui.showShare(card);
+  });
+  document.getElementById('share-close').addEventListener('click', () => ui.modal('share', false));
+  document.getElementById('share-save').addEventListener('click', () => {
+    const a = document.createElement('a');
+    a.href = ui.shareCanvas.toDataURL('image/png');
+    a.download = `smash-hanvit-${Date.now()}.png`;
+    a.click();
+  });
+  document.getElementById('share-go').addEventListener('click', () => {
+    ui.shareCanvas.toBlob(async (blob) => {
+      const file = new File([blob], 'smash-hanvit.png', { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: 'SMASH 한빛', text: `오늘 ${fmt(score.score)}점! #SMASH한빛` }); } catch { /* 취소 */ }
+      } else {
+        ui.toast('이 기기에선 바로 공유가 안 돼요', '이미지 저장 후 인스타그램에 올려 주세요');
+      }
+    }, 'image/png');
+  });
 
   // 나침반: 누르면 북쪽이 화면 위로 오게 돌아가요.
   let spin = null;
@@ -647,7 +853,10 @@ async function start() {
       camera.position.set(controls.target.x + Math.sin(a) * spin.r, controls.target.y + spin.y, controls.target.z + Math.cos(a) * spin.r);
       if (spin.t >= 1) spin = null;
     }
-    if (!director.update(dt)) {
+    robodog.update(dt, camera);
+    if (robodog.active) {
+      // 로봇개 조종 중에는 로봇개 카메라가 움직여요.
+    } else if (!director.update(dt)) {
       controls.update();
       controls.target.x = Math.max(terrain.x0, Math.min(terrain.x0 + terrain.w, controls.target.x));
       controls.target.z = Math.max(terrain.z0, Math.min(terrain.z0 + terrain.d, controls.target.z));
@@ -655,6 +864,9 @@ async function start() {
     nukePad.update(dt);
     fireworks.update(dt);
     flagPole?.update(dt);
+    stream?.update(dt);
+    cats.update(dt);
+    extras.update(dt);
     xmas.update(dt, director.busy ? director.look : controls.target);
     seasons.update(dt, director.busy ? director.look : controls.target);
     // 높이 올라가면 우주: 하늘이 검어지고 별이 보여요.
@@ -719,13 +931,13 @@ async function start() {
     if (boardTimer <= 0) { boardTimer = 30; board.refresh().then(renderBoard); }
 
     hoverTimer -= dt;
-    if (hover && hoverTimer <= 0 && !holding && !director.busy) {
+    if (hover && hoverTimer <= 0 && !holding && !director.busy && !robodog.active) {
       hoverTimer = 1 / 20;
       const P = pick(hover[0], hover[1]);
       reticle.visible = !!P;
       if (P) reticle.position.set(P.x, P.y + 0.25, P.z);
     }
-    if (holding || director.busy) reticle.visible = false;
+    if (holding || director.busy || robodog.active) reticle.visible = false;
 
     camera.position.add(fx.shakeOff);
     renderer.render(scene, camera);
@@ -735,6 +947,14 @@ async function start() {
 
   ui.ready();
   applyEdition(true);
+  applyWeather();
+  setInterval(() => { if (simDate.toDateString() === new Date().toDateString()) applyWeather(); }, 15 * 60 * 1000);
+  try {
+    if (!localStorage.getItem('smash-hint-meal')) {
+      localStorage.setItem('smash-hint-meal', '1');
+      setTimeout(() => ui.toast('숨은 기능', '미래관(급식실)을 꾹 누르면 그날 급식이 나와요. 고양이도 찾아 보세요!'), 7000);
+    }
+  } catch { /* 무시 */ }
   stage.classList.add('fold-in');
   setTimeout(() => stage.classList.remove('fold-in'), 1100);
   if (!board.asked) setTimeout(pickGrade, 700);

@@ -98,6 +98,7 @@ export class UI {
 
   setGrade(g, mult) {
     $('mult').textContent = `×${mult.toFixed(2)}`;
+    $('mini-grade').textContent = `${g}등급`;
     if (g === this.grade) return;
     const up = g < this.grade;
     this.grade = g;
@@ -128,7 +129,7 @@ export class UI {
     box.prepend(t);
     setTimeout(() => t.classList.add('out'), 2200);
     setTimeout(() => t.remove(), 2700);
-    while (box.children.length > 3) box.lastChild.remove();
+    while (box.children.length > (this.maxToasts || 3)) box.lastChild.remove();
   }
 
   notice(html) {
@@ -383,6 +384,99 @@ export class UI {
     $('compass-dial').setAttribute('transform', `rotate(${-deg} 40 40)`);
     $('compass-deg').textContent = `${Math.round((deg + 360) % 360)}°`;
   }
+
+  // 기기별 화면: phone(폰), tablet(패드), desktop
+  setDevice(kind) {
+    document.body.dataset.device = kind;
+    this.maxToasts = kind === 'phone' ? 1 : kind === 'tablet' ? 2 : 3;
+  }
+
+  dogMode(on) {
+    document.body.classList.toggle('dog-on', on);
+    $('dog-ui').hidden = !on;
+  }
+
+  async showDonate(cfg) {
+    const ov = $('donate');
+    const d = cfg.donate || {};
+    $('dn-msg').textContent = d.message || '이 게임은 한빛고 학생이 직접 만든 비공식 팬 게임이에요. 재밌게 했다면 작은 응원을 보내 주세요!';
+    const link = $('dn-link');
+    const box = $('dn-qr');
+    box.innerHTML = '';
+    if (d.qr) {
+      const img = new Image();
+      img.src = d.qr;
+      img.alt = '후원 QR 코드';
+      box.appendChild(img);
+    } else if (d.link) {
+      try {
+        const mod = await import('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/+esm');
+        const qrcode = mod.default || mod;
+        const q = qrcode(0, 'M');
+        q.addData(d.link);
+        q.make();
+        const n = q.getModuleCount(), cell = 6, pad = 3;
+        const c = document.createElement('canvas');
+        c.width = c.height = (n + pad * 2) * cell;
+        const g = c.getContext('2d');
+        g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+        g.fillStyle = '#101a34';
+        for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) g.fillRect((k + pad) * cell, (r + pad) * cell, cell, cell);
+        box.appendChild(c);
+      } catch {
+        box.textContent = 'QR을 만들지 못했어요. 아래 버튼을 눌러 주세요.';
+      }
+    } else {
+      box.innerHTML = '<p class="dn-empty">아직 후원 링크가 없어요.<br>config.json의 <code>donate.link</code>에<br>토스·카카오페이 송금 링크를 넣으면 QR이 생겨요.</p>';
+    }
+    link.hidden = !d.link;
+    if (d.link) { link.href = d.link; link.textContent = d.label || '후원하러 가기'; }
+    ov.hidden = false;
+    requestAnimationFrame(() => ov.classList.add('show'));
+  }
+
+  hideDonate() {
+    const ov = $('donate');
+    ov.classList.remove('show');
+    setTimeout(() => { ov.hidden = true; }, 250);
+  }
+
+
+  setWeather(w) {
+    const c = $('weather-chip');
+    c.hidden = !w;
+    if (w) c.innerHTML = `<b>대전 지금 ${w.temp}°</b><span>${w.name}</span>`;
+  }
+
+  modal(id, on) {
+    const ov = $(id);
+    if (on) { ov.hidden = false; requestAnimationFrame(() => ov.classList.add('show')); }
+    else { ov.classList.remove('show'); setTimeout(() => { ov.hidden = true; }, 250); }
+  }
+
+  showMeal(dateText, meals, error) {
+    $('meal-date').textContent = dateText;
+    const box = $('meal-list');
+    box.innerHTML = '';
+    if (meals === null) box.innerHTML = '<p class="meal-empty">급식 메뉴를 불러오는 중…</p>';
+    else if (error) box.innerHTML = `<p class="meal-empty">급식 정보를 불러오지 못했어요.<br><small>${error}</small></p>`;
+    else if (!meals.length) box.innerHTML = '<p class="meal-empty">이 날은 급식이 없어요.<br>주말이나 방학일 수 있어요.</p>';
+    else for (const m of meals) {
+      const sec = document.createElement('section');
+      sec.className = 'meal-item';
+      sec.innerHTML = `<div class="meal-head"><b>${m.kind}</b><span>${m.cal || ''}</span></div><ul>${m.dishes.map((d) => `<li>${d}</li>`).join('')}</ul>`;
+      box.appendChild(sec);
+    }
+    this.modal('meal', true);
+  }
+
+  showShare(canvas) {
+    const img = $('share-img');
+    img.src = canvas.toDataURL('image/png');
+    this.shareCanvas = canvas;
+    this.modal('share', true);
+  }
+
 
   ready() {
     const l = $('loading');

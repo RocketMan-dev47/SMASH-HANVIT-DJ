@@ -399,4 +399,73 @@ export class Sound {
     n.connect(bp).connect(g).connect(this.master);
     n.start(t); n.stop(t + dur + 0.05);
   }
+
+  // 화염방사기: 누르는 동안 '화르르'
+  flame(on) {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    if (on && this.on && !this.flameNodes) {
+      const t = ctx.currentTime;
+      const n = this.noiseSrc();
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass'; bp.frequency.value = 520; bp.Q.value = 0.6;
+      const lfo = ctx.createOscillator(), lg = ctx.createGain();
+      lfo.frequency.value = 7; lg.gain.value = 180;
+      lfo.connect(lg).connect(bp.frequency);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.55, t + 0.12);
+      n.connect(bp).connect(g).connect(this.master);
+      n.start(t); lfo.start(t);
+      this.flameNodes = { n, lfo, g };
+    } else if (!on && this.flameNodes) {
+      const { n, lfo, g } = this.flameNodes;
+      const t = ctx.currentTime;
+      g.gain.cancelScheduledValues(t);
+      g.gain.setValueAtTime(g.gain.value, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      n.stop(t + 0.25); lfo.stop(t + 0.25);
+      this.flameNodes = null;
+    }
+  }
+
+  // 고양이 "냐옹"(새끼는 더 높고 짧게)
+  meow(kitten = false) {
+    const ctx = this.ensure();
+    if (!ctx || !this.on) return;
+    const t = ctx.currentTime;
+    const base = kitten ? 820 : 520, dur = kitten ? 0.38 : 0.6;
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(base, t);
+    o.frequency.linearRampToValueAtTime(base * 1.45, t + dur * 0.35);
+    o.frequency.linearRampToValueAtTime(base * 0.85, t + dur);
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass'; f.Q.value = 3;
+    f.frequency.setValueAtTime(900, t);
+    f.frequency.linearRampToValueAtTime(1800, t + dur * 0.4);
+    f.frequency.linearRampToValueAtTime(1000, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.35, t + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(f).connect(g).connect(this.master);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+
+  // 매점 잭팟 '띠리링'
+  jackpot() {
+    const ctx = this.ensure();
+    if (!ctx || !this.on) return;
+    [784, 988, 1175, 1568].forEach((f, i) => {
+      const t = ctx.currentTime + i * 0.09;
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.25, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+      o.connect(g).connect(this.master);
+      o.start(t); o.stop(t + 0.4);
+    });
+  }
 }
