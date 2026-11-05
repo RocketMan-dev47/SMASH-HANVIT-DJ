@@ -85,6 +85,7 @@ export class TreasureHunt {
 
   win() {
     this.active = false;
+    clearTimeout(this.tidy); this.tidy = setTimeout(() => { if (!this.active) { this.clear(); this.w.ui.hunt(null); } }, 6000); // 6초 뒤 거리 고리·숫자·안내 정리
     this.reveal(true);
     const shots = this.used;
     if (!this.best || shots < this.best) { this.best = shots; try { localStorage.setItem('smash-hunt-best', String(shots)); } catch { /* 무시 */ } }
@@ -98,6 +99,7 @@ export class TreasureHunt {
 
   lose() {
     this.active = false;
+    clearTimeout(this.tidy); this.tidy = setTimeout(() => { if (!this.active) { this.clear(); this.w.ui.hunt(null); } }, 6000); // 6초 뒤 거리 고리·숫자·안내 정리
     this.reveal(false);
     this.w.ui.hunt({ done: true, win: false, min: this.min, best: this.best });
   }

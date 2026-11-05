@@ -212,7 +212,7 @@ async function start() {
   }
   // 길을 따라 높이를 부드럽게(골프 카트·택배차가 덜컹거리지 않게)
   terrain.smoothRoads(campus.roads || [], 3);
-  for (const d of bdata) terrain.flatten(d.poly, d.base, 1.5);
+  for (const d of bdata) terrain.flatten(d.poly, d.base, 3.5); // 경계를 완만하게(톱니 경사 없애기)
 
   const painter = new GroundPainter(terrain, quality === 'high' ? 4096 : 2048);
   painter.paint(campus, bdata);
@@ -793,7 +793,8 @@ async function start() {
     if (p && lastPeriod && key !== lastPeriod && p.kind !== 'off') {
       const n = parseInt(p.label, 10);
       const subj = p.kind === 'class' && ttRows ? ttRows.find((r) => r.period === n)?.subject : '';
-      sound.bell(); badges.give('bell');
+      if (world.autoSound()) sound.bell();
+      badges.give('bell');
       ui.toast('딩동댕동', `${p.label}${p.kind === 'class' ? ' 시작' : ''}${subj ? ` · ${subj}` : ''}`);
       if (p.kind === 'lunch') setTimeout(() => world.pill?.(innerWidth / 2, innerHeight * 0.62, { icon: '🏁', text: '점심시간! 급식실까지', action: '레이싱', onGo: () => world.openGame?.('race') }), 1200);
     }
@@ -1251,6 +1252,14 @@ async function start() {
     if (!/^[A-Z]$/.test(a)) ui.toast(`📚 ${label} 보충`, `${a} · 보충 수업 없어요`, 'gold');
     else ui.toast(`📚 ${label} 보충`, `8교시 ${a}반 · 9교시 ${b}반`, 'gold');
   }
+
+  // 자동 소리(실제 교시 종소리·택배차 경적): 설정에서 켜요. 기본은 꺼짐
+  world.autoSound = () => { try { return localStorage.getItem('smash-autosound') === 'on'; } catch { return false; } };
+  {
+    const box = document.getElementById('set-autosound');
+    if (box) { box.checked = world.autoSound(); box.addEventListener('change', () => { try { localStorage.setItem('smash-autosound', box.checked ? 'on' : 'off'); } catch { /* 무시 */ } }); }
+  }
+  world.cats = world.cats || cats;
 
   // ---------- 미니게임 · 시즌 패스 ----------
   const pass = new SeasonPass({
@@ -2003,7 +2012,13 @@ async function start() {
   // ---------- 매 프레임 ----------
   const clock = new THREE.Clock();
   let hoverTimer = 0, slowTimer = 0, sendTimer = 20, boardTimer = 30;
+  // 20초 동안 아무 조작이 없으면 한 프레임 걸러 그려요(초당 30번) → 팬 소음·전력 줄이기
+  let lastInput = performance.now(), skip = false;
+  for (const ev of ['pointerdown', 'pointermove', 'wheel', 'keydown', 'touchstart']) addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true });
   renderer.setAnimationLoop(() => {
+    const idle = performance.now() - lastInput > 20000 && !cinema.active && !document.body.classList.contains('arc-on');
+    skip = idle ? !skip : false;
+    if (skip) return;
     const dt = Math.min(clock.getDelta(), 1 / 20);
     if (spin) {
       spin.t = Math.min(1, spin.t + dt / 0.7);
@@ -2202,7 +2217,7 @@ async function start() {
     for (const b of $id('set-quality').querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === gfx.mode);
     $id('set-q-now').textContent = `지금 ${LEVELS[gfx.level].name}`;
     $id('set-install').hidden = !installEvt;
-    $id('set-ver').textContent = `SMASH 한빛 v1.9.4 · 배지 ${badges.list().filter((x) => x.got).length}/${badges.list().length}`;
+    $id('set-ver').textContent = `SMASH 한빛 v1.9.5 · 배지 ${badges.list().filter((x) => x.got).length}/${badges.list().length}`;
   }
   $id('btn-settings').addEventListener('click', () => { syncSettings(); ui.modal('settings', true); });
   $id('set-close').addEventListener('click', () => ui.modal('settings', false));

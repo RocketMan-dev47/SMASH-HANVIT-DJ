@@ -9,6 +9,7 @@ export const LEVELS = [
 export class Quality {
   constructor({ renderer, sun, seasons, onChange }) {
     this.r = renderer; this.sun = sun; this.seasons = seasons; this.onChange = onChange;
+    addEventListener('resize', () => { if (this.level !== undefined && !document.body.classList.contains('blockworld')) this.r.setPixelRatio(this.ratioFor(LEVELS[this.level])); }); // resize-reapply
     let saved = null;
     try { saved = localStorage.getItem('smash-quality'); } catch { /* 무시 */ }
     this.mode = saved || 'auto';
@@ -24,10 +25,17 @@ export class Quality {
     if (mode !== 'auto') this.apply(Number(mode));
   }
 
+  // 큰 화면(5K 아이맥 등)은 그리는 픽셀 수에 상한을 둬요: 높음 450만 · 보통 300만 · 낮음 180만 픽셀
+  ratioFor(L) {
+    const budget = [1.8e6, 3.0e6, 4.5e6][this.level] || 3e6;
+    const css = Math.max(1, innerWidth * innerHeight);
+    return Math.max(0.75, Math.min(devicePixelRatio || 1, L.ratio, Math.sqrt(budget / css)));
+  }
+
   apply(level) {
     this.level = Math.max(0, Math.min(2, level));
     const L = LEVELS[this.level];
-    if (!document.body.classList.contains('blockworld')) this.r.setPixelRatio(Math.min(devicePixelRatio || 1, L.ratio));
+    if (!document.body.classList.contains('blockworld')) this.r.setPixelRatio(this.ratioFor(L));
     this.r.shadowMap.enabled = L.shadows;
     this.sun.castShadow = L.shadows;
     this.seasons?.setDensity?.(L.fall);

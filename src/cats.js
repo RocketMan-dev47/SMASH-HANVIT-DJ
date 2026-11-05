@@ -36,6 +36,9 @@ function catModel(main, accent, stripes = false) {
 }
 
 export class Cats {
+  // 1인칭에선 실제 크기(약 30 cm)로, 위에서 볼 땐 잘 보이게 크게
+  realistic(on) { this.real = on; for (const c of this.cats) c.g.scale.setScalar(c.scale * (on ? 0.22 : 1)); }
+
   constructor(world, spots) {
     this.w = world;
     this.cats = [];

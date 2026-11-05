@@ -242,3 +242,12 @@ secret 키(service_role)는 절대 넣지 마세요.
 ## Supabase 새 키(publishable) 지원
 
 - config.json의 supabaseKey에 `sb_publishable_...` 키를 넣으면 apikey 머리글만 보내요. 예전 anon 키도 그대로 돼요.
+
+## v1.9.5: 아이맥 피드백
+
+- 큰 화면 픽셀 상한(높음 450만·보통 300만·낮음 180만), 20초 조작 없으면 초당 30번만 그리기 → 팬 소음↓
+- 설정 "종소리·택배차 경적 자동 재생"(기본 꺼짐)
+- 본관 앞 길(track) 아스팔트, 건물 바닥 경계 3.5 m로 완만하게
+- 타임캡슐 끝나고 6초 뒤 표시 정리
+- 1인칭에서 고양이 실제 크기
+- 본관 3층(config.json buildings)

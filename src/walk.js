@@ -16,6 +16,7 @@ export class Walk {
   }
 
   start(P, camera, controls) {
+    this.w.cats?.realistic?.(true);
     this.active = true;
     this.controls = controls;
     controls.enabled = false;
@@ -27,6 +28,7 @@ export class Walk {
   }
 
   stop(camera) {
+    this.w.cats?.realistic?.(false);
     if (!this.active) return;
     this.active = false;
     this.keys.clear();

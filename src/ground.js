@@ -147,18 +147,18 @@ export class GroundPainter {
 
   paintRoad(r, pass) {
     const g = this.g;
-    const foot = ['footway', 'path', 'steps', 'pedestrian', 'cycleway', 'track'].includes(r.kind);
+    const foot = ['footway', 'path', 'steps', 'pedestrian', 'cycleway'].includes(r.kind); // track(본관 앞 길)은 실제로 아스팔트
     g.lineCap = 'round';
     g.lineJoin = 'round';
     g.beginPath();
     r.pts.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z)));
     if (pass === 'base') {
       g.strokeStyle = foot ? '#a59d8e' : '#77756f';
-      g.lineWidth = r.w + (foot ? 0.6 : 1.2);
+      g.lineWidth = (r.kind === 'track' ? Math.max(5, r.w) : r.w) + (foot ? 0.6 : 1.2);
       g.stroke();
     } else if (pass === 'top') {
       g.strokeStyle = foot ? '#c9c0ae' : '#55575a';
-      g.lineWidth = r.w;
+      g.lineWidth = r.kind === 'track' ? Math.max(5, r.w) : r.w;
       g.stroke();
     } else if (!foot && r.w >= 6) {
       g.setLineDash([3, 3]);

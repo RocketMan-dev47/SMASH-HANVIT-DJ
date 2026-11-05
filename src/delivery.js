@@ -64,7 +64,7 @@ export class Delivery {
     this.stay = 240;
     this.truck.visible = true;
     this.w.ui.toast('HASA 택배 도착!', '주차장의 택배차를 눌러 보세요');
-    this.w.sound.honk?.();
+    if (this.w.autoSound?.()) this.w.sound.honk?.();
   }
 
   leave() { if (this.state === 'park') { this.state = 'leave'; this.seg = this.path.length - 2; this.u = 1; } }
