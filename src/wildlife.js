@@ -247,7 +247,13 @@ export class Wildlife {
         a.timer = 3 + Math.random() * 6;
         // 고라니는 아주 가끔 산 아래로 조금 내려와요.
         if (a.id === 'deer' && Math.random() < 0.04) a.target.lerp(new THREE.Vector3(this.focus[0], 0, this.focus[1]), 0.25);
-        if (a.id === 'frog') { a.jump = 0.4; if (Math.random() < 0.5) this.w.sound.animal?.('frog'); }
+        if (a.id === 'frog') {
+          a.jump = 0.4;
+          // 개굴(도-동) 소리는 35 m 안에 있을 때만, 20초에 한 번까지
+          const cam = this.w.camera?.position, d = cam ? cam.distanceTo(a.pos) : 999;
+          a.croakT = (a.croakT ?? 0);
+          if (d < 35 && this.t - a.croakT > 20 && Math.random() < 0.5) { a.croakT = this.t; this.w.sound.animal?.('frog', 1 - d / 35); }
+        }
       }
       if ((a.state === 'walk' || a.state === 'flee') && a.target) {
         const dx = a.target.x - a.pos.x, dz = a.target.z - a.pos.z, d = Math.hypot(dx, dz);

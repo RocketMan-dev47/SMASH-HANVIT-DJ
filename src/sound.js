@@ -516,9 +516,10 @@ export class Sound {
   }
 
   // 동물 소리: frog(개굴), boar(꿀꿀), deer(컹), bat(찍), squirrel(찌르르), mantis(바스락)
-  animal(kind) {
+  animal(kind, vol = 1) {
     const ctx = this.ensure();
-    if (!ctx || !this.on) return;
+    if (!ctx || !this.on || vol <= 0.02) return;
+    const V = Math.min(1, vol);
     const t = ctx.currentTime;
     const tone = (type, f0, f1, dur, vol, at = 0, q = 0) => {
       const o = ctx.createOscillator(), g = ctx.createGain();
@@ -533,7 +534,7 @@ export class Sound {
       node.connect(g).connect(this.master);
       o.start(t + at); o.stop(t + at + dur + 0.02);
     };
-    if (kind === 'frog') { tone('square', 220, 160, 0.09, 0.25, 0, 700); tone('square', 240, 170, 0.12, 0.25, 0.13, 700); }
+    if (kind === 'frog') { tone('square', 220, 160, 0.09, 0.2 * V, 0, 700); tone('square', 240, 170, 0.12, 0.2 * V, 0.13, 700); }
     else if (kind === 'boar') { tone('sawtooth', 140, 90, 0.18, 0.3, 0, 400); tone('sawtooth', 130, 85, 0.22, 0.3, 0.22, 400); }
     else if (kind === 'deer') { tone('sawtooth', 700, 380, 0.25, 0.25, 0, 1200); }
     else if (kind === 'bat') { for (let i = 0; i < 3; i++) tone('sine', 4200, 3000, 0.04, 0.12, i * 0.07); }

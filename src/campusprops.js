@@ -17,12 +17,12 @@ export function carveStands(terrain, e, fieldY, N) {
   terrain.carve(e.mx - R, e.mx + R, e.mz - R, e.mz + R, (x, z) => {
     const dx = x - e.mx, dz = z - e.mz;
     const u = dx * lx + dz * lz, v = dx * e.nx + dz * e.nz;
-    if (v < -1 || v > vEnd + 8) return null;
+    if (v < -1 || v > vEnd + 70) return null; // 뒤쪽 비탈은 원래 땅과 만날 때까지 이어져요
     const out = Math.max(uMin - u, u - uMax, 0);
     if (out > 12) return null;
     const step = Math.max(0, Math.min(N, Math.floor((v - 1.6) / depth) + 1));
-    const base = v < 1.6 ? fieldY : v > vEnd ? fieldY + N * rise + (v - vEnd) * 0.8 : fieldY + step * rise - 0.15;
-    return base + out * 1.0;
+    const base = v < 1.6 ? fieldY : v > vEnd ? fieldY + N * rise + (v - vEnd) * 0.55 : fieldY + step * rise - 0.15;
+    return base + out * 0.7;
   });
 }
 

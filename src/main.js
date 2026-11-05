@@ -55,6 +55,7 @@ import { Quality, LEVELS } from './quality.js';
 import { exportCode, importCode, drawQR } from './backup.js';
 import { Construction, planSite } from './construction.js';
 import { ParkedCars } from './parking.js';
+import { planTerrace, shapeTerrace, buildTerrace } from './terrace.js';
 import { DevMenu } from './devmenu.js';
 import { campaign, STAGES, stationSVG } from './campaign.js';
 import { Album, LetterCard } from './keepsake.js';
@@ -116,6 +117,7 @@ async function start() {
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false; // 그림자는 한 프레임 걸러(초당 30번) 다시 그려요
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   stage.appendChild(renderer.domElement);
@@ -213,10 +215,21 @@ async function start() {
   // 길을 따라 높이를 부드럽게(골프 카트·택배차가 덜컹거리지 않게)
   terrain.smoothRoads(campus.roads || [], 3);
   for (const d of bdata) terrain.flatten(d.poly, d.base, 3.5); // 경계를 완만하게(톱니 경사 없애기)
+  // 본관 앞 옹벽·계단: 본관은 앞길보다 3~4 m 높은 단 위에 있어요. 비탈 대신 실제처럼 옹벽으로.
+  let terracePlan = null;
+  if (mainB && cfg.terrace !== false) {
+    const toward = standEdge ? [-standEdge.nx, -standEdge.nz] : (() => { const c = centroid(mainB.poly), q = bigPitch ? centroid(bigPitch) : [c[0], c[1] + 1], L = Math.hypot(q[0] - c[0], q[1] - c[1]) || 1; return [(q[0] - c[0]) / L, (q[1] - c[1]) / L]; })();
+    terracePlan = planTerrace(terrain, mainB, toward);
+    if (terracePlan) {
+      shapeTerrace(terrain, terracePlan);
+      for (const d of bdata) if (d !== mainB) terrain.flatten(d.poly, d.base, 0.5); // 옆 건물(증축동 등) 바닥은 그대로
+    }
+  }
 
   const painter = new GroundPainter(terrain, quality === 'high' ? 4096 : 2048);
   painter.paint(campus, bdata);
   scene.add(terrain.build(painter.texture), terrain.skirt);
+  if (terracePlan) buildTerrace(scene, terracePlan);
 
   // ---------- 빛 ----------
   const hemi = new THREE.HemisphereLight(0xd4e6ff, 0x6b5a45, 1.35);
@@ -227,7 +240,7 @@ async function start() {
   sun.position.set(cx - 180, 330, cz + 120);
   sun.target.position.set(cx, 0, cz);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(quality === 'high' ? 4096 : 2048, quality === 'high' ? 4096 : 2048);
+  sun.shadow.mapSize.set(quality === 'high' ? 2048 : 1024, quality === 'high' ? 2048 : 1024); // 4096은 GPU에 너무 무거워요
   const sc = sun.shadow.camera;
   sc.left = -span * 0.62; sc.right = span * 0.62; sc.top = span * 0.62; sc.bottom = -span * 0.62;
   sc.near = 50; sc.far = 1100;
@@ -2013,12 +2026,13 @@ async function start() {
   const clock = new THREE.Clock();
   let hoverTimer = 0, slowTimer = 0, sendTimer = 20, boardTimer = 30;
   // 20초 동안 아무 조작이 없으면 한 프레임 걸러 그려요(초당 30번) → 팬 소음·전력 줄이기
-  let lastInput = performance.now(), skip = false;
+  let lastInput = performance.now(), skip = false, shadowTick = false;
   for (const ev of ['pointerdown', 'pointermove', 'wheel', 'keydown', 'touchstart']) addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true });
   renderer.setAnimationLoop(() => {
     const idle = performance.now() - lastInput > 20000 && !cinema.active && !document.body.classList.contains('arc-on');
     skip = idle ? !skip : false;
     if (skip) return;
+    shadowTick = !shadowTick; renderer.shadowMap.needsUpdate = idle || shadowTick;
     const dt = Math.min(clock.getDelta(), 1 / 20);
     if (spin) {
       spin.t = Math.min(1, spin.t + dt / 0.7);
@@ -2217,7 +2231,7 @@ async function start() {
     for (const b of $id('set-quality').querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === gfx.mode);
     $id('set-q-now').textContent = `지금 ${LEVELS[gfx.level].name}`;
     $id('set-install').hidden = !installEvt;
-    $id('set-ver').textContent = `SMASH 한빛 v1.9.5 · 배지 ${badges.list().filter((x) => x.got).length}/${badges.list().length}`;
+    $id('set-ver').textContent = `SMASH 한빛 v1.9.6 · 배지 ${badges.list().filter((x) => x.got).length}/${badges.list().length}`;
   }
   $id('btn-settings').addEventListener('click', () => { syncSettings(); ui.modal('settings', true); });
   $id('set-close').addEventListener('click', () => ui.modal('settings', false));

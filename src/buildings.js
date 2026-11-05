@@ -7,7 +7,7 @@ import { facadeTexture, facadeGlowTexture, concreteTexture, roofTexture, STYLES 
 
 const GRAVITY = 15.5; // 실제(9.8)보다 조금 세게: 무너지는 맛이 빨라요
 const FOUNDATION = 2.5;
-const MAX_DYNAMIC = 650;
+const MAX_DYNAMIC = 420; // 너무 많으면 연타할 때 멈칫해요
 
 const _v = new THREE.Vector3();
 const _q = new THREE.Quaternion();
@@ -606,7 +606,8 @@ export class BuildingSystem {
     }
     if (this.landings && this.sound) this.sound.crumble(Math.min(1, this.landings / 6));
 
-    for (const b of this.list) if (b.dirtyStatic && b.pieces) b.rebuildStatic();
+    this.staticTimer = (this.staticTimer || 0) - dt;
+    if (this.staticTimer <= 0) { this.staticTimer = 0.12; for (const b of this.list) if (b.dirtyStatic && b.pieces) b.rebuildStatic(); } // 연타해도 몰아서 한 번에
     this.rebuildTimer -= dt;
     if (this.rebuildTimer <= 0) {
       this.rebuildTimer = 0.35;
