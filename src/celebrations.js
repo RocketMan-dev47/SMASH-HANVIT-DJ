@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { taegukgiCanvas } from './flag.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Flyers } from './extras.js';
 
@@ -215,6 +216,24 @@ export class Celebrations {
       this.banner('🔬 과학의 날 · HASA 특별 임무', '#06243f', '#8fd3ff', '#5ac8fa');
     } else if (kind === 'firstsnow') {
       this.banner('❄️ 첫눈이 와요 ❄️', '#f4f8ff', '#2f6fe0', '#8fd3ff');
+    } else if (kind === 'newyear') {
+      this.banner('🎉 새해 복 많이 받으세요 🎉', '#fff8e1', '#c8102e', '#ffd700'); this.w.seasons?.special('confetti'); this.fireT = 1;
+    } else if (kind === 'seollal') {
+      this.banner('🧧 설날 · 새해 복 많이 받으세요', '#fff1f0', '#b0182c', '#f3b33d'); this.w.seasons?.special('saekdong'); this.kites(); this.bags();
+    } else if (kind === 'chuseok') {
+      this.banner('🌕 풍성한 한가위 되세요', '#fff9e6', '#7a4a12', '#ffcf5c'); this.moon(); this.lanterns();
+    } else if (kind === 'valentine') {
+      this.banner('💝 해피 발렌타인데이', '#fff0f5', '#d0457a', '#ff8fb1'); this.w.seasons?.special('hearts');
+    } else if (kind === 'whiteday') {
+      this.banner('🍬 해피 화이트데이', '#f7fbff', '#2f6fe0', '#bfe3ff'); this.w.seasons?.special('candy');
+    } else if (kind === 'samil' || kind === 'gwangbok') {
+      this.banner(kind === 'samil' ? '삼일절 · 대한독립 만세' : '광복절 · 빛을 되찾은 날', '#ffffff', '#1f3d8a', '#c8102e'); this.flags('kr');
+    } else if (kind === 'arbor' || kind === 'earth') {
+      this.banner(kind === 'arbor' ? '🌱 식목일 · 나무 한 그루' : '🌍 지구의 날 · 지구를 위한 하루', '#f1fbef', '#2f7a3a', '#7cc36b'); this.w.seasons?.special('leafgreen'); if (kind === 'arbor') this.saplings();
+    } else if (kind === 'students') {
+      this.banner('📣 학생의 날 · 학생독립운동기념일', '#f5f7ff', '#1f3d8a', '#ffc94a'); this.flags('school');
+    } else if (kind === 'dongji') {
+      this.banner('🌙 동지 · 일 년 중 가장 긴 밤', '#f4f1ff', '#3b2f6e', '#b25a5a'); this.w.seasons?.special('beans');
     } else if (kind === 'parents') {
       // 어버이날: 폭닥한 솜뭉치 구름 + 동물 가족 행렬 + 파스텔 화면
       this.banner('💐 엄마 아빠, 사랑해요 💐', '#fff5f7', '#d0457a', '#ffb7cf');
@@ -222,6 +241,85 @@ export class Celebrations {
       document.body.classList.add('ed-parents');
       this.cotton();
       this.parade();
+    }
+  }
+
+  // 길을 따라 깃발(태극기 또는 한빛 깃발)
+  flags(type) {
+    let tex;
+    if (type === 'kr') { tex = new THREE.CanvasTexture(taegukgiCanvas(256)); }
+    else { const c = document.createElement('canvas'); c.width = 128; c.height = 84; const g = c.getContext('2d'); g.fillStyle = '#1f3d8a'; g.fillRect(0, 0, 128, 84); g.fillStyle = '#ffc94a'; g.fillRect(0, 34, 128, 16); g.fillStyle = '#fff'; g.font = '800 20px sans-serif'; g.fillText('HANVIT', 22, 28); tex = new THREE.CanvasTexture(c); }
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const pole = new THREE.MeshStandardMaterial({ color: '#d9d9d9', metalness: 0.5, roughness: 0.4 }), cloth = new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.8 });
+    for (const [x, z] of this.roadside(20, 2.6).slice(0, 36)) {
+      const g = new THREE.Group(); g.position.set(x, this.w.terrain.heightAt(x, z), z); g.rotation.y = Math.random() * Math.PI * 2;
+      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 4.2, 6), pole); p.position.y = 2.1; g.add(p);
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.0), cloth); f.position.set(0.78, 3.6, 0); g.add(f);
+      this.group.add(g); this.items.push({ type: 'flag', m: f, ph: Math.random() * 6 });
+    }
+  }
+
+  // 청사초롱(위는 빨강, 아래는 파랑) 길을 따라
+  lanterns() {
+    const red = new THREE.MeshStandardMaterial({ color: '#d63a4a', emissive: '#ff5a3c', emissiveIntensity: 1.2 }), blue = new THREE.MeshStandardMaterial({ color: '#2f4fb0', emissive: '#3b5bff', emissiveIntensity: 0.9 }), pole = new THREE.MeshStandardMaterial({ color: '#6b4a2e' });
+    for (const [x, z] of this.roadside(13, 2.2).slice(0, 48)) {
+      const g = new THREE.Group(); g.position.set(x, this.w.terrain.heightAt(x, z), z);
+      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 2.6, 6), pole); p.position.y = 1.3; g.add(p);
+      const a = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.28, 10), red); a.position.y = 2.35; g.add(a);
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.22, 10), blue); b.position.y = 2.1; g.add(b);
+      this.group.add(g); this.items.push({ type: 'static', m: g });
+    }
+  }
+
+  // 커다란 보름달(운동장 너머 하늘)
+  moon() {
+    const P = this.pitch, T = this.w.terrain;
+    const m = new THREE.Mesh(new THREE.SphereGeometry(38, 32, 20), new THREE.MeshBasicMaterial({ color: '#fff3c4', fog: false }));
+    m.position.set(P.cx + 520, T.heightAt(P.cx, P.cz) + 260, P.cz - 380); this.group.add(m);
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 10, 64, 64, 64); gr.addColorStop(0, 'rgba(255,240,190,0.7)'); gr.addColorStop(1, 'rgba(255,240,190,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, fog: false })); glow.scale.set(240, 240, 1); glow.position.copy(m.position); this.group.add(glow);
+    this.items.push({ type: 'static', m });
+  }
+
+  // 하늘에 연 여섯 개(방패연·가오리연), 실은 운동장 쪽으로
+  kites() {
+    const P = this.pitch, T = this.w.terrain, gy = T.heightAt(P.cx, P.cz);
+    const cols = [['#d63a4a', '#f3b33d'], ['#2f6fe0', '#ffffff'], ['#3fa34d', '#f3b33d'], ['#ff8fb1', '#2f6fe0'], ['#f3b33d', '#d63a4a'], ['#ffffff', '#1f3d8a']];
+    cols.forEach(([a, b], i) => {
+      const c = document.createElement('canvas'); c.width = 96; c.height = 128; const g = c.getContext('2d');
+      g.fillStyle = a; g.fillRect(0, 0, 96, 128); g.fillStyle = b; g.fillRect(0, 0, 96, 30); g.beginPath(); g.arc(48, 70, 16, 0, Math.PI * 2); g.fillStyle = '#ffffffcc'; g.fill();
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+      const k = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 3.2), new THREE.MeshStandardMaterial({ map: t, side: THREE.DoubleSide }));
+      const ang = (i / 6) * Math.PI * 2, r = 20 + i * 6;
+      k.position.set(P.cx + Math.cos(ang) * r, gy + 45 + i * 6, P.cz + Math.sin(ang) * r);
+      const anchor = new THREE.Vector3(P.cx + Math.cos(ang) * (r * 0.3), gy + 1, P.cz + Math.sin(ang) * (r * 0.3));
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([anchor, k.position.clone()]), new THREE.LineBasicMaterial({ color: '#f5f5f5', transparent: true, opacity: 0.6 }));
+      this.group.add(k, line);
+      this.items.push({ type: 'kite', m: k, base: k.position.clone(), ph: i * 1.3, line, anchor });
+    });
+  }
+
+  // 복주머니(운동장 둘레)
+  bags() {
+    const P = this.pitch, T = this.w.terrain;
+    for (let i = 0; i < 10; i++) {
+      const ang = (i / 10) * Math.PI * 2, x = P.cx + Math.cos(ang) * (P.L / 2 + 4), z = P.cz + Math.sin(ang) * (P.W / 2 + 4);
+      const g = new THREE.Group(); g.position.set(x, T.heightAt(x, z), z);
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.7, 14, 10), new THREE.MeshStandardMaterial({ color: i % 2 ? '#d63a4a' : '#ff8fb1', roughness: 0.6 })); body.scale.set(1, 1.1, 1); body.position.y = 0.75; g.add(body);
+      const knot = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.5, 10), new THREE.MeshStandardMaterial({ color: '#f3b33d' })); knot.position.y = 1.6; g.add(knot);
+      this.group.add(g); this.items.push({ type: 'static', m: g });
+    }
+  }
+
+  // 묘목(운동장 둘레)
+  saplings() {
+    const P = this.pitch, T = this.w.terrain, leaf = new THREE.MeshStandardMaterial({ color: '#4caf50' }), trunk = new THREE.MeshStandardMaterial({ color: '#7a5230' });
+    for (let i = 0; i < 14; i++) {
+      const ang = (i / 14) * Math.PI * 2, x = P.cx + Math.cos(ang) * (P.L / 2 + 7), z = P.cz + Math.sin(ang) * (P.W / 2 + 7);
+      const g = new THREE.Group(); g.position.set(x, T.heightAt(x, z), z);
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.8, 6), trunk); t.position.y = 0.4; g.add(t);
+      const l = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.1, 8), leaf); l.position.y = 1.2; g.add(l);
+      this.group.add(g); this.items.push({ type: 'static', m: g });
     }
   }
 
@@ -361,13 +459,15 @@ export class Celebrations {
   setJelly(b, s) {
     for (const o of [b.intact, b.decor, b.cap]) {
       if (!o) continue;
-      const cx = b.c2[0], cz = b.c2[1], by = b.base;
+      if (!o.userData.p0) o.userData.p0 = o.position.clone();
+      const p0 = o.userData.p0, cx = b.c2[0], cz = b.c2[1], by = b.base;
       const sx = 1 + (1 - s) * 0.5;
       o.scale.set(sx, s, sx);
-      o.position.set(cx * (1 - sx), by * (1 - s), cz * (1 - sx));
+      // 바닥 가운데(cx, by, cz)를 기준으로 늘었다 줄었다
+      o.position.set(cx + (p0.x - cx) * sx, by + (p0.y - by) * s, cz + (p0.z - cz) * sx);
     }
   }
-  unjelly(b) { for (const o of [b.intact, b.decor, b.cap]) if (o) { o.scale.set(1, 1, 1); o.position.set(0, 0, 0); } }
+  unjelly(b) { for (const o of [b.intact, b.decor, b.cap]) if (o && o.userData.p0) { o.scale.set(1, 1, 1); o.position.copy(o.userData.p0); delete o.userData.p0; } }
 
   update(dt) {
     for (const f of [this.candy, this.sticks, this.caps, ...this.jamo]) f.update(dt);
@@ -376,6 +476,22 @@ export class Celebrations {
     const t = this.t;
     // 졸업식: 운동장에서 학사모가 하늘로
     if (this.kind === 'graduation') { this.capT = (this.capT || 0) - dt; if (this.capT <= 0) { this.capT = 3.5; const P = this.pitch; this.caps.spawn(new THREE.Vector3(P.cx + (Math.random() - 0.5) * P.L * 0.6, this.w.terrain.heightAt(P.cx, P.cz), P.cz + (Math.random() - 0.5) * P.W * 0.6), 10, 18, 1.6); } }
+    for (const it of this.items) {
+      if (it.type === 'flag') it.m.rotation.y = Math.sin(t * 3 + it.ph) * 0.25;
+      else if (it.type === 'kite') {
+        it.m.position.set(it.base.x + Math.sin(t * 0.7 + it.ph) * 3, it.base.y + Math.sin(t * 1.1 + it.ph) * 1.5, it.base.z + Math.cos(t * 0.6 + it.ph) * 3);
+        it.m.rotation.z = Math.sin(t * 1.3 + it.ph) * 0.3;
+        it.line.geometry.setFromPoints([it.anchor, it.m.position.clone()]);
+      }
+    }
+    if (this.kind === 'newyear' && this.pitch) {
+      this.fireT -= dt;
+      if (this.fireT <= 0) {
+        this.fireT = 1.5 + Math.random() * 2;
+        const P = this.pitch, y = this.w.terrain.heightAt(P.cx, P.cz) + 50 + Math.random() * 30;
+        this.w.fx.burst?.(new THREE.Vector3(P.cx + (Math.random() - 0.5) * 120, y, P.cz + (Math.random() - 0.5) * 90), new THREE.Color(['#ffd700', '#ff5d5d', '#64d2ff', '#ffffff'][Math.floor(Math.random() * 4)]), 120);
+      }
+    }
     // 어버이날 행렬: 운동장 둘레(타원)를 한 줄로, 깡총깡총
     if (this.kind === 'parents' && this.pitch) {
       this.paradeT += dt * 0.035;

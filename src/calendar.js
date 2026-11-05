@@ -8,6 +8,17 @@ const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 
 const ICON = {
+  newyear: '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="22" r="4" fill="#ffd700"/><path d="M24 6v8M24 30v8M8 22h8M32 22h8M13 11l5 5M30 28l5 5M35 11l-5 5M18 28l-5 5" stroke="#ff6b6b" stroke-width="3" stroke-linecap="round"/></svg>',
+  seollal: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M14 18h20l-3 22H17z" fill="#d63a4a"/><path d="M16 18q8-8 16 0" fill="none" stroke="#f3b33d" stroke-width="3"/><circle cx="24" cy="29" r="4" fill="#f3b33d"/></svg>',
+  chuseok: '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="22" r="14" fill="#ffe08a"/><circle cx="19" cy="18" r="3" fill="#f5cf6a"/><circle cx="29" cy="26" r="2" fill="#f5cf6a"/><path d="M8 42h32" stroke="#7a4a12" stroke-width="3"/></svg>',
+  valentine: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 40L9 25a8 8 0 0 1 15-9 8 8 0 0 1 15 9z" fill="#ff5d8f"/></svg>',
+  whiteday: '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="10" fill="#e8f3ff" stroke="#2f6fe0" stroke-width="2"/><path d="M14 24l-8-5v10zM34 24l8-5v10z" fill="#bfe3ff"/></svg>',
+  samil: '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="12" width="36" height="24" rx="2" fill="#fff" stroke="#ccc"/><circle cx="24" cy="24" r="6" fill="#c8102e"/><path d="M18 24a6 6 0 0 0 12 0z" fill="#1f3d8a"/></svg>',
+  gwangbok: '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="12" width="36" height="24" rx="2" fill="#fff" stroke="#ccc"/><circle cx="24" cy="24" r="6" fill="#c8102e"/><path d="M18 24a6 6 0 0 0 12 0z" fill="#1f3d8a"/><path d="M24 4v6" stroke="#ffd700" stroke-width="3"/></svg>',
+  arbor: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 42V24" stroke="#7a5230" stroke-width="3"/><path d="M24 26c-10 0-12-10-12-14 8 0 12 6 12 14zM24 22c0-8 6-14 14-14 0 6-4 14-14 14z" fill="#4caf50"/></svg>',
+  earth: '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="16" fill="#3a8fd6"/><path d="M14 18c4-2 6 2 10 0s4 6 0 8-8 0-10-2zM28 30c3 0 6 2 6 4" fill="#5ac85a" stroke="#5ac85a" stroke-width="2"/></svg>',
+  students: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 8v32" stroke="#555" stroke-width="3"/><path d="M12 10h26l-6 7 6 7H12z" fill="#1f3d8a"/><path d="M12 15h20" stroke="#ffc94a" stroke-width="3"/></svg>',
+  dongji: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M30 10a14 14 0 1 0 8 22A12 12 0 0 1 30 10z" fill="#5a4d9e"/><circle cx="16" cy="36" r="5" fill="#9b2f2f"/><circle cx="24" cy="38" r="4" fill="#b84040"/></svg>',
   parents: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 40V26" stroke="#3f8a3a" stroke-width="3"/><circle cx="24" cy="18" r="10" fill="#ff8fb1"/><circle cx="19" cy="15" r="5" fill="#ffc2d4"/><circle cx="29" cy="15" r="5" fill="#ffc2d4"/><circle cx="24" cy="22" r="5" fill="#ffc2d4"/><circle cx="12" cy="34" r="6" fill="#fff" opacity=".9"/><circle cx="36" cy="34" r="6" fill="#fff" opacity=".9"/></svg>',
   halloween: '<svg viewBox="0 0 48 48" aria-hidden="true"><ellipse cx="24" cy="28" rx="16" ry="13" fill="#ff8a1f"/><path d="M24 15c0-4 2-7 5-8" stroke="#3f8a3a" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M15 25l5-3 1 5zM33 25l-5-3-1 5zM16 32q8 6 16 0l-3 1-2-2-3 2-3-2-2 2z" fill="#2a1600"/></svg>',
   stickday: '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="13" y="6" width="6" height="36" rx="3" fill="#e9c58b"/><rect x="13" y="6" width="6" height="24" rx="3" fill="#6b3a1e"/><rect x="29" y="6" width="6" height="36" rx="3" fill="#e9c58b"/><rect x="29" y="6" width="6" height="24" rx="3" fill="#6b3a1e"/></svg>',
@@ -38,6 +49,17 @@ export const EDITIONS = {
   entrance: { title: '입학식', sub: '새내기 여러분 환영해요', icon: ICON.entrance, desc: '정문 벚꽃 아치와 흩날리는 꽃잎' },
   graduation: { title: '졸업식', sub: '졸업을 진심으로 축하해요', icon: ICON.graduation, desc: '운동장에서 학사모가 하늘로 날아올라요' },
   hangul: { title: '한글날', sub: '우리 글자를 기려요', icon: ICON.hangul, desc: '이름표가 명조체로, 폭발하면 자음·모음 블록' },
+  newyear: { title: '새해 첫날', sub: '새해 복 많이 받으세요', icon: ICON.newyear, desc: '금빛 꽃가루와 수시로 터지는 불꽃' },
+  seollal: { title: '설날', sub: '연 날리고 복주머니 챙기기', icon: ICON.seollal, desc: '하늘을 나는 연, 복주머니, 색동 꽃가루' },
+  chuseok: { title: '추석', sub: '풍성한 한가위', icon: ICON.chuseok, desc: '커다란 보름달과 길가의 청사초롱' },
+  valentine: { title: '발렌타인데이', sub: '달콤한 하루', icon: ICON.valentine, desc: '하트가 흩날려요' },
+  whiteday: { title: '화이트데이', sub: '사탕 같은 하루', icon: ICON.whiteday, desc: '알록달록 사탕이 흩날려요' },
+  samil: { title: '삼일절', sub: '대한독립 만세', icon: ICON.samil, desc: '길을 따라 태극기' },
+  gwangbok: { title: '광복절', sub: '빛을 되찾은 날', icon: ICON.gwangbok, desc: '길을 따라 태극기' },
+  arbor: { title: '식목일', sub: '나무 한 그루', icon: ICON.arbor, desc: '운동장 둘레의 묘목과 초록 잎' },
+  earth: { title: '지구의 날', sub: '지구를 위한 하루', icon: ICON.earth, desc: '초록 잎이 흩날려요' },
+  students: { title: '학생의 날', sub: '학생독립운동기념일', icon: ICON.students, desc: '길을 따라 한빛 깃발' },
+  dongji: { title: '동지', sub: '일 년 중 가장 긴 밤', icon: ICON.dongji, desc: '팥알처럼 붉은 알갱이와 깊은 밤' },
   parents: { title: '어버이날', sub: '폭닥폭닥, 고마운 마음을 전해요', icon: ICON.parents, desc: '솜뭉치 구름과 동물 가족 행렬, 건물 속 부모님께 쓰는 쪽지' },
   children: { title: '어린이날', sub: '오늘은 학교도 말랑말랑', icon: ICON.children, desc: '젤리처럼 출렁이는 건물과 풍선' },
   aprilfools: { title: '만우절', sub: '오늘 학교는 젤리로 지었대요', icon: ICON.aprilfools, desc: '말랑말랑 출렁이는 학교' },
@@ -83,13 +105,18 @@ export function buildEvents(cfg) {
     put(new Date(yy, 11, 25), { kind: 'xmas', label: '크리스마스' });
   }
   // 해마다 같은 날 열리는 에디션
-  const yearly = [['10-31', 'halloween', '할로윈'], ['11-11', 'stickday', '막대과자 데이'], ['10-09', 'hangul', '한글날'], ['05-15', 'teachers', '스승의 날'], ['05-05', 'children', '어린이날'], ['05-08', 'parents', '어버이날'], ['04-01', 'aprilfools', '만우절'], ['04-21', 'science', '과학의 날'], [cfg.founding || cfg.anniversary || '04-08', 'anniv', '개교기념일'], [cfg.entrance || '03-02', 'entrance', '입학식']];
+  const yearly = [['10-31', 'halloween', '할로윈'], ['11-11', 'stickday', '막대과자 데이'], ['10-09', 'hangul', '한글날'], ['05-15', 'teachers', '스승의 날'], ['05-05', 'children', '어린이날'], ['05-08', 'parents', '어버이날'], ['04-01', 'aprilfools', '만우절'], ['04-21', 'science', '과학의 날'], ['01-01', 'newyear', '새해 첫날'], ['02-14', 'valentine', '발렌타인데이'], ['03-14', 'whiteday', '화이트데이'], ['03-01', 'samil', '삼일절'], ['08-15', 'gwangbok', '광복절'], ['04-05', 'arbor', '식목일'], ['04-22', 'earth', '지구의 날'], ['11-03', 'students', '학생의 날'], ['12-22', 'dongji', '동지'], [cfg.founding || cfg.anniversary || '04-08', 'anniv', '개교기념일'], [cfg.entrance || '03-02', 'entrance', '입학식']];
   if (cfg.graduation) yearly.push([cfg.graduation, 'graduation', '졸업식']);
   if (cfg.sportsDay) yearly.push([cfg.sportsDay, 'sports', '체육대회']);
   if (cfg.festival) yearly.push([cfg.festival, 'festival', '한빛 축제']);
   for (const [md, kind, label] of yearly) {
     const [m, d] = md.slice(-5).split('-').map(Number);
     for (const yy of [y - 1, y, y + 1, y + 2]) put(new Date(yy, m - 1, d), { kind, label, ed: true });
+  }
+  // 설날·추석(음력이라 해마다 달라요): 확인된 날짜만
+  for (const [ds, kind, label] of [['2026-02-16', 'seollal', '설날'], ['2026-02-17', 'seollal', '설날'], ['2026-02-18', 'seollal', '설날'], ['2026-09-24', 'chuseok', '추석'], ['2026-09-25', 'chuseok', '추석'], ['2026-09-26', 'chuseok', '추석'], ['2027-02-06', 'seollal', '설날'], ['2027-02-07', 'seollal', '설날'], ['2027-02-08', 'seollal', '설날'], ['2027-02-09', 'seollal', '설날'], ['2027-09-14', 'chuseok', '추석'], ['2027-09-15', 'chuseok', '추석'], ['2027-09-16', 'chuseok', '추석'], ...(cfg.lunarEditions || [])]) {
+    const [yy, mm, dd] = ds.split('-').map(Number);
+    put(new Date(yy, mm - 1, dd), { kind, label, ed: true });
   }
   for (const a of cfg.anniversaries || []) {
     const [m, d] = a.date.split('-').map(Number);
@@ -100,7 +127,7 @@ export function buildEvents(cfg) {
 
 export function editionFor(events, date) {
   const evs = events.get(key(date)) || [];
-  for (const k of ['xmas', 'party', 'suneung', 'halloween', 'stickday', 'anniv', 'teachers', 'sports', 'festival', 'entrance', 'graduation', 'hangul', 'parents', 'children', 'aprilfools', 'science']) if (evs.some((e) => e.kind === k)) return k;
+  for (const k of ['xmas', 'party', 'suneung', 'halloween', 'stickday', 'anniv', 'teachers', 'sports', 'festival', 'entrance', 'graduation', 'hangul', 'parents', 'children', 'aprilfools', 'science', 'seollal', 'chuseok', 'newyear', 'samil', 'gwangbok', 'students', 'arbor', 'earth', 'valentine', 'whiteday', 'dongji']) if (evs.some((e) => e.kind === k)) return k;
   return null;
 }
 
