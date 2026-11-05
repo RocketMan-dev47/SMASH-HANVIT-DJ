@@ -33,6 +33,9 @@ const FALL = {
   spring: { n: 2600, colors: ['#ffd6e5', '#f9c0d6', '#ffe9f1', '#f4a9c6', '#ffffff'], size: 0.42, speed: [0.6, 1.4], sway: 1.6, petal: 1 },
   autumn: { n: 1900, colors: ['#e0601e', '#f2a43a', '#c6371f', '#e8c13a', '#a8541c'], size: 0.55, speed: [1.0, 2.0], sway: 1.3, petal: 1 },
   winter: { n: 5200, colors: ['#ffffff', '#f2f6fb', '#e8f0fa'], size: 0.42, speed: [1.6, 3.6], sway: 0.35, petal: 0 },
+  cotton: { n: 900, colors: ['#ffffff', '#ffe3ec', '#fff4dc', '#fbe8ff'], size: 1.15, speed: [0.25, 0.55], sway: 2.2, petal: 0 },
+  halloween: { n: 1200, colors: ['#ff7a00', '#8a3ffc', '#ffb347', '#3b1d6e'], size: 0.6, speed: [0.8, 1.6], sway: 1.4, petal: 1 },
+  clover: { n: 1400, colors: ['#5cc96b', '#8ee07a', '#2f9e44', '#ffd479'], size: 0.6, speed: [0.7, 1.4], sway: 1.5, petal: 1 },
   rain: { n: 4200, colors: ['#b8cfe6', '#d6e4f2', '#9fbad6'], size: 0.55, speed: [24, 30], sway: 0, petal: 2 },
 };
 
@@ -104,6 +107,19 @@ export class Seasons {
     if (this.season && !this.noFall) this.setFall(FALL[this.weatherFall() || this.season]);
   }
 
+  // 특별 에디션 파티클(수능: 네잎클로버 잎이 흩날려요)
+  special(kind) {
+    this.specialKind = kind;
+    if (kind && FALL[kind]) this.setFall(FALL[kind]);
+    else if (this.season) this.setFall(this.noFall ? null : FALL[this.weatherFall() || this.season]);
+  }
+
+  // 화질 단계에 맞춰 떨어지는 입자 수를 줄여요(0~1).
+  setDensity(k) {
+    this.density = k;
+    if (this.points) this.points.geometry.setDrawRange(0, Math.floor((this.spec?.n || 0) * k));
+  }
+
   setScale(px) {
     this.scale = px;
     if (this.mat) this.mat.uniforms.uScale.value = px;
@@ -139,6 +155,7 @@ export class Seasons {
     });
     this.points = new THREE.Points(geo, this.mat);
     this.points.frustumCulled = false;
+    if (this.density !== undefined) geo.setDrawRange(0, Math.floor(N * this.density));
     this.w.scene.add(this.points);
   }
 

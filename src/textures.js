@@ -12,6 +12,8 @@ export const STYLES = {
   salmon: { wall: '#cf9c8c', band: '#f1e7de', glass: '#4b6273', frame: '#f4eee6', sill: '#e9ddd1', tile: true },
   whiteblue: { wall: '#eef0f2', band: '#2f5ea8', glass: '#3a5b7a', frame: '#d6dbe0', sill: '#cdd3d9' },
   stone: { wall: '#7f858c', band: '#9aa0a6', glass: '#2e3b45', frame: '#c9ccd0', sill: '#8d939a', tile: true },
+  // 본관 증축동(2026년 완공 사진): 1층 연회색 콘크리트 기둥 + 큰 유리 · 2층 붉은 벽돌 패널 + 가로 띠창 · 3층 통유리
+  annex: { wall: '#a4482f', band: '#d9d6d0', glass: '#2c3e4c', frame: '#3a3d42', sill: '#d9d6d0', brick: true },
   wood: { wall: '#8a5a3b', band: '#6b432b', glass: '#3b2a1f', frame: '#c79a6b', sill: '#6b432b' },
 };
 
@@ -36,8 +38,46 @@ function noise(ctx, w, h, count, colors, rmin, rmax, rand) {
 
 const facadeCache = new Map();
 // 창문 한 칸(가로 한 칸 × 한 층) 무늬. 아래쪽이 그 층의 바닥이에요.
+// 증축동: 3개 층을 한 장(256×768)에 그려 세로로 한 번만 덮어요(층마다 모양이 달라서).
+function annexTexture(glow) {
+  const W = 256, F = 256, c = document.createElement('canvas');
+  c.width = W; c.height = F * 3;
+  const g = c.getContext('2d');
+  const glass = (x, y, w, h) => { const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, '#8fb2c6'); gr.addColorStop(0.45, '#2c3e4c'); gr.addColorStop(1, '#1b2731'); g.fillStyle = gr; g.fillRect(x, y, w, h); g.fillStyle = 'rgba(255,255,255,0.12)'; g.beginPath(); g.moveTo(x, y + h * 0.3); g.lineTo(x + w * 0.35, y); g.lineTo(x + w * 0.5, y); g.lineTo(x, y + h * 0.5); g.fill(); };
+  const lit = (x, y, w, h, a) => { g.fillStyle = `rgba(255,236,190,${a})`; g.fillRect(x, y, w, h); };
+  if (glow) { g.fillStyle = '#000'; g.fillRect(0, 0, W, F * 3); }
+  // 3층(위쪽 1/3): 바닥부터 천장까지 통유리 + 얇은 짙은 창살, 아래쪽 벽돌 띠
+  if (glow) lit(8, 28, W - 16, 196, 0.55); else {
+    g.fillStyle = '#a4482f'; g.fillRect(0, 0, W, F);
+    glass(6, 22, W - 12, 200);
+    g.fillStyle = '#3a3d42'; for (const x of [6, 88, 170, W - 10]) g.fillRect(x, 22, 4, 200); g.fillRect(6, 110, W - 12, 4); g.fillRect(0, 0, W, 16);
+    g.fillStyle = '#9a4430'; g.fillRect(0, 222, W, 34);
+  }
+  // 2층(가운데 1/3): 붉은 벽돌 패널 + 가로로 긴 띠창
+  const y2 = F;
+  if (glow) lit(0, y2 + 88, W, 92, 0.6); else {
+    g.fillStyle = '#a4482f'; g.fillRect(0, y2, W, F);
+    g.strokeStyle = 'rgba(70,20,10,0.25)'; g.lineWidth = 1;
+    for (let y = y2, r = 0; y < y2 + F; y += 8, r++) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); for (let x = (r % 2) * 16; x < W; x += 32) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke(); } }
+    glass(0, y2 + 86, W, 96);
+    g.fillStyle = '#3a3d42'; g.fillRect(0, y2 + 82, W, 5); g.fillRect(0, y2 + 180, W, 5); for (const x of [0, 64, 128, 192]) g.fillRect(x, y2 + 86, 4, 96); g.fillRect(0, y2 + 150, W, 3);
+  }
+  // 1층(아래 1/3): 연회색 콘크리트 기둥 + 큰 유리(짙은 틀)
+  const y1 = F * 2;
+  if (glow) lit(40, y1 + 20, W - 48, 226, 0.7); else {
+    g.fillStyle = '#d9d6d0'; g.fillRect(0, y1, W, F);
+    g.fillStyle = 'rgba(0,0,0,0.05)'; for (let i = 0; i < 400; i++) g.fillRect(Math.random() * W, y1 + Math.random() * F, 2, 2);
+    glass(40, y1 + 18, W - 48, 230);
+    g.fillStyle = '#2a2c30'; for (const x of [40, 92, 144, 196, W - 10]) g.fillRect(x, y1 + 18, 5, 230); g.fillRect(40, y1 + 18, W - 48, 6); g.fillRect(40, y1 + 96, W - 48, 3);
+  }
+  const t = finish(c, !glow);
+  t.repeat.set(1, 1 / 3);
+  return t;
+}
+
 export function facadeTexture(styleName) {
   if (facadeCache.has(styleName)) return facadeCache.get(styleName);
+  if (styleName === 'annex') { const t = annexTexture(false); facadeCache.set(styleName, t); return t; }
   const st = STYLES[styleName] || STYLES.cream;
   const S = 256;
   const c = document.createElement('canvas');
@@ -103,6 +143,7 @@ export function facadeTexture(styleName) {
 // 밤에 켜지는 창문 빛. 8칸×6층마다 반복되고, 창문마다 켜짐·밝기·색이 달라요.
 const glowCache = new Map();
 export function facadeGlowTexture(styleName) {
+  if (styleName === 'annex') { if (!glowCache.has('annex')) glowCache.set('annex', annexTexture(true)); return glowCache.get('annex'); }
   if (glowCache.has(styleName)) return glowCache.get(styleName);
   const st = STYLES[styleName] || STYLES.cream;
   const C = 64, NX = 8, NY = 6;

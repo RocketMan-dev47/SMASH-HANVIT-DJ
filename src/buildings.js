@@ -105,7 +105,7 @@ class Building {
     Object.assign(this, { minX: x0, maxX: x1, minZ: z0, maxZ: z1 });
     this.outline = makeOutline(this.poly);
     this.ctx = { outline: this.outline, base: this.base, floorH: this.floorH, bay: 3.4 };
-    this.mats = sys.materialsFor(d.style, d.roof);
+    this.mats = sys.materialsFor(d.style, d.roof, d.id);
 
     const geo = pieceGeometry(this.poly, this.base - FOUNDATION, this.top, { ...this.ctx, top: true });
     this.intact = new THREE.Mesh(toBuffer(geo), this.mats);
@@ -217,6 +217,11 @@ class Building {
     const plan = planBuilding(this.poly, { seed: this.seed, cell: 4.6, maxCells: 110 });
     this.pieces = [];
     this.columns = [];
+    // 칸(세로 기둥)마다 바닥 모양과 범위: 장애물 판정에 써요(남아 있는 칸만 막아요).
+    this.cellShapes = plan.cells.map((c) => {
+      const xs = c.shape.map((q) => q[0]), zs = c.shape.map((q) => q[1]);
+      return { poly: c.shape, minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
+    });
     for (const cell of plan.cells) {
       const col = [];
       for (let f = 0; f < this.levels; f++) {
@@ -246,6 +251,7 @@ class Building {
     this.staticMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.mats);
     this.staticMesh.castShadow = this.staticMesh.receiveShadow = true;
     this.sys.group.add(this.staticMesh);
+    this.buildClassrooms(plan.cells);
     this.rubbleMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.mats);
     this.rubbleMesh.castShadow = this.rubbleMesh.receiveShadow = true;
     this.sys.group.add(this.rubbleMesh);
@@ -290,6 +296,62 @@ class Building {
     out.volume += p.sv;
   }
 
+  // 부서진 단면 속 교실: 칸(조각)마다 책상·의자, 가끔 칠판. 그 칸이 떨어져 나가면 같이 사라져요.
+  buildClassrooms(cells) {
+    const S = this.sys;
+    if (!S.deskGeo) {
+      S.deskGeo = new THREE.BoxGeometry(1.1, 0.08, 0.6).translate(0, 0.75, 0);
+      S.chairGeo = new THREE.BoxGeometry(0.45, 0.5, 0.45).translate(0, 0.25, -0.55);
+      S.boardGeo = new THREE.BoxGeometry(2.6, 1.15, 0.06).translate(0, 1.55, 0);
+      S.deskMat = new THREE.MeshStandardMaterial({ color: 0xc9a27a, roughness: 0.7 });
+      S.chairMat = new THREE.MeshStandardMaterial({ color: 0x3d6fb6, roughness: 0.6 });
+      S.boardMat = new THREE.MeshStandardMaterial({ color: 0x1f4a3a, roughness: 0.9 });
+    }
+    const rand = mulberry32(this.seed + 11);
+    const desks = [], boards = [];
+    const perCell = [];
+    for (let c = 0; c < cells.length; c++) {
+      const cen = centroid(cells[c].shape);
+      for (let f = 0; f < this.levels; f++) {
+        const y = this.base + f * this.floorH;
+        const list = [];
+        for (const dx of [-0.8, 0.8]) {
+          const x = cen[0] + dx, z = cen[1] + (rand() - 0.5) * 0.6;
+          if (!pointInPolygon([x, z], cells[c].shape)) continue;
+          list.push(['d', desks.length]);
+          desks.push([x, y, z]);
+        }
+        if (rand() < 0.12) { list.push(['b', boards.length]); boards.push([cen[0], y, cen[1] + 1.6, rand() * Math.PI]); }
+        perCell.push(list);
+      }
+    }
+    const mk = (geo, mat, n) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, n)); m.count = n; m.castShadow = false; m.receiveShadow = true; return m; };
+    this.desks = mk(S.deskGeo, S.deskMat, desks.length);
+    this.chairs = mk(S.chairGeo, S.chairMat, desks.length);
+    this.boards = mk(S.boardGeo, S.boardMat, boards.length);
+    const m = new THREE.Matrix4();
+    desks.forEach(([x, y, z], i) => { m.makeTranslation(x, y, z); this.desks.setMatrixAt(i, m); this.chairs.setMatrixAt(i, m); });
+    boards.forEach(([x, y, z, r], i) => { m.makeRotationY(r).setPosition(x, y, z); this.boards.setMatrixAt(i, m); });
+    this.classrooms = { perCell, hidden: new Set() };
+    S.group.add(this.desks, this.chairs, this.boards);
+  }
+
+  // 떨어져 나간 칸의 책상은 숨겨요.
+  syncClassrooms() {
+    if (!this.classrooms) return;
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    let changed = false;
+    this.pieces.forEach((p, k) => {
+      if (p.state === 0 || this.classrooms.hidden.has(k)) return;
+      this.classrooms.hidden.add(k);
+      for (const [t, i] of this.classrooms.perCell[k] || []) {
+        if (t === 'd') { this.desks.setMatrixAt(i, zero); this.chairs.setMatrixAt(i, zero); } else this.boards.setMatrixAt(i, zero);
+        changed = true;
+      }
+    });
+    if (changed) for (const m of [this.desks, this.chairs, this.boards]) m.instanceMatrix.needsUpdate = true;
+  }
+
   blast(P, R, power, out, rand) {
     if (!this.near(P, R + 2)) return;
     if (!this.pieces) this.fracture();
@@ -317,6 +379,7 @@ class Building {
     if (hit) {
       this.dirtyStatic = true;
       this.support(P, out, rand);
+      this.syncClassrooms();
     }
   }
 
@@ -350,6 +413,7 @@ class Building {
   }
 
   lostFraction() {
+    if (this.launched) return 1;
     return Math.min(1, this.lost / this.totalVolume);
   }
 }
@@ -371,8 +435,9 @@ export class BuildingSystem {
     this.labelsVisible = true;
   }
 
-  materialsFor(style, roof) {
-    const key = style + '|' + roof;
+  // 건물마다 따로(밤에 건물별로 불을 켜고 끄려고)
+  materialsFor(style, roof, id = '') {
+    const key = style + '|' + roof + '|' + id;
     if (this.matCache.has(key)) return this.matCache.get(key);
     const facade = new THREE.MeshStandardMaterial({
       map: facadeTexture(style), roughness: 0.82, metalness: 0.02,
@@ -396,10 +461,13 @@ export class BuildingSystem {
     }
   }
 
-  setNight(on) {
-    for (const [facade] of this.matCache.values()) {
-      facade.emissive.set(on ? 0xffffff : 0x000000);
-      facade.emissiveIntensity = on ? 0.95 : 0;
+  // lit(building) → true면 그 건물 창문에 불이 켜져요(없으면 모두).
+  setNight(on, lit = null) {
+    for (const b of this.list) {
+      const [facade] = b.mats;
+      const yes = on && (!lit || lit(b));
+      facade.emissive.set(yes ? 0xffffff : 0x000000);
+      facade.emissiveIntensity = yes ? 0.95 : 0;
     }
   }
 
@@ -415,7 +483,7 @@ export class BuildingSystem {
 
   destroyedFraction() {
     const t = this.totalVolume;
-    return t ? this.list.reduce((s, b) => s + Math.min(b.lost, b.totalVolume), 0) / t : 0;
+    return t ? this.list.reduce((s, b) => s + (b.launched ? b.totalVolume : Math.min(b.lost, b.totalVolume)), 0) / t : 0;
   }
 
   pickables() {
@@ -431,7 +499,7 @@ export class BuildingSystem {
   blast(P, R, power, seed = Math.random() * 1e9) {
     const rand = mulberry32(seed);
     const out = { volume: 0, rubble: 0, collapses: [] };
-    for (const b of this.list) b.blast(P, R, power, out, rand);
+    for (const b of this.list) if (!b.launched) b.blast(P, R, power, out, rand);
     // 날아가던 조각도 다시 밀어냅니다.
     for (const p of this.dynamic) {
       _v.copy(p.pos).sub(P);
@@ -570,6 +638,7 @@ export class BuildingSystem {
       if (b.label) this.group.remove(b.label);
       if (b.cap) this.group.remove(b.cap);
       if (b.decor) this.group.remove(b.decor);
+      if (b.desks) this.group.remove(b.desks, b.chairs, b.boards);
       if (b.intact) { this.group.remove(b.intact); b.intact.geometry.dispose(); }
       if (b.staticMesh) { this.group.remove(b.staticMesh); b.staticMesh.geometry.dispose(); }
       if (b.rubbleMesh) { this.group.remove(b.rubbleMesh); b.rubbleMesh.geometry.dispose(); }

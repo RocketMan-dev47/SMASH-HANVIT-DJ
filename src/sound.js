@@ -429,28 +429,74 @@ export class Sound {
     }
   }
 
-  // 고양이 "냐옹"(새끼는 더 높고 짧게)
-  meow(kitten = false) {
+  // 고양이 소리: meow(냐-옹), kitten(미야~), long(냐아아옹), trill(브르릅), purr(골골)
+  meow(kind = 'meow') {
     const ctx = this.ensure();
     if (!ctx || !this.on) return;
     const t = ctx.currentTime;
-    const base = kitten ? 820 : 520, dur = kitten ? 0.38 : 0.6;
+    if (kind === 'purr') {
+      // 골골: 낮은 소리를 초당 25번 떨리게
+      const n = this.noiseSrc();
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 260;
+      const am = ctx.createGain();
+      const lfo = ctx.createOscillator(), lg = ctx.createGain();
+      lfo.frequency.value = 25; lg.gain.value = 0.5;
+      am.gain.value = 0.5;
+      lfo.connect(lg).connect(am.gain);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.9, t + 0.2);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.8);
+      n.connect(lp).connect(am).connect(g).connect(this.master);
+      n.start(t); lfo.start(t); n.stop(t + 1.9); lfo.stop(t + 1.9);
+      return;
+    }
+    const P = {
+      meow: { f: [560, 780, 520], dur: 0.62, form: [1100, 1900, 1200] },
+      kitten: { f: [900, 1250, 1050], dur: 0.36, form: [1800, 2600, 2100] },
+      long: { f: [520, 820, 480], dur: 1.0, form: [1000, 2000, 1100] },
+      trill: { f: [620, 900, 760], dur: 0.32, form: [1500, 2300, 1800] },
+    }[kind] || { f: [560, 780, 520], dur: 0.6, form: [1100, 1900, 1200] };
     const o = ctx.createOscillator();
     o.type = 'sawtooth';
-    o.frequency.setValueAtTime(base, t);
-    o.frequency.linearRampToValueAtTime(base * 1.45, t + dur * 0.35);
-    o.frequency.linearRampToValueAtTime(base * 0.85, t + dur);
-    const f = ctx.createBiquadFilter();
-    f.type = 'bandpass'; f.Q.value = 3;
-    f.frequency.setValueAtTime(900, t);
-    f.frequency.linearRampToValueAtTime(1800, t + dur * 0.4);
-    f.frequency.linearRampToValueAtTime(1000, t + dur);
+    o.frequency.setValueAtTime(P.f[0], t);
+    o.frequency.linearRampToValueAtTime(P.f[1], t + P.dur * 0.35);
+    o.frequency.linearRampToValueAtTime(P.f[2], t + P.dur);
+    // 살짝 떨리는 목소리(비브라토)
+    const vib = ctx.createOscillator(), vg = ctx.createGain();
+    vib.frequency.value = kind === 'trill' ? 28 : 6; vg.gain.value = kind === 'trill' ? 40 : 12;
+    vib.connect(vg).connect(o.frequency);
+    // "냐"→"옹" 입 모양: 포먼트 필터 두 개
+    const f1 = ctx.createBiquadFilter(), f2 = ctx.createBiquadFilter();
+    f1.type = f2.type = 'bandpass'; f1.Q.value = 4; f2.Q.value = 6;
+    f1.frequency.setValueAtTime(P.form[0], t); f1.frequency.linearRampToValueAtTime(P.form[1], t + P.dur * 0.4); f1.frequency.linearRampToValueAtTime(P.form[2], t + P.dur);
+    f2.frequency.setValueAtTime(P.form[0] * 2.2, t); f2.frequency.linearRampToValueAtTime(P.form[1] * 1.6, t + P.dur);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.35, t + 0.05);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(f).connect(g).connect(this.master);
-    o.start(t); o.stop(t + dur + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.4, t + 0.06);
+    g.gain.setValueAtTime(0.4, t + P.dur * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + P.dur);
+    const mix = ctx.createGain();
+    mix.gain.value = 1;
+    o.connect(f1).connect(mix);
+    o.connect(f2).connect(mix);
+    mix.connect(g).connect(this.master);
+    o.start(t); vib.start(t); o.stop(t + P.dur + 0.05); vib.stop(t + P.dur + 0.05);
+  }
+
+  // 택배차 '빵빵'
+  honk() {
+    const ctx = this.ensure();
+    if (!ctx || !this.on) return;
+    [0, 0.28].forEach((d) => {
+      const t = ctx.currentTime + d;
+      const o = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain();
+      o.type = o2.type = 'square'; o.frequency.value = 415; o2.frequency.value = 523;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      o.connect(g); o2.connect(g); g.connect(this.master);
+      o.start(t); o2.start(t); o.stop(t + 0.25); o2.stop(t + 0.25);
+    });
   }
 
   // 매점 잭팟 '띠리링'
@@ -467,5 +513,112 @@ export class Sound {
       o.connect(g).connect(this.master);
       o.start(t); o.stop(t + 0.4);
     });
+  }
+
+  // 동물 소리: frog(개굴), boar(꿀꿀), deer(컹), bat(찍), squirrel(찌르르), mantis(바스락)
+  animal(kind) {
+    const ctx = this.ensure();
+    if (!ctx || !this.on) return;
+    const t = ctx.currentTime;
+    const tone = (type, f0, f1, dur, vol, at = 0, q = 0) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, t + at);
+      o.frequency.exponentialRampToValueAtTime(f1, t + at + dur);
+      g.gain.setValueAtTime(0.0001, t + at);
+      g.gain.exponentialRampToValueAtTime(vol, t + at + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + at + dur);
+      let node = o;
+      if (q) { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = q; f.Q.value = 3; o.connect(f); node = f; }
+      node.connect(g).connect(this.master);
+      o.start(t + at); o.stop(t + at + dur + 0.02);
+    };
+    if (kind === 'frog') { tone('square', 220, 160, 0.09, 0.25, 0, 700); tone('square', 240, 170, 0.12, 0.25, 0.13, 700); }
+    else if (kind === 'boar') { tone('sawtooth', 140, 90, 0.18, 0.3, 0, 400); tone('sawtooth', 130, 85, 0.22, 0.3, 0.22, 400); }
+    else if (kind === 'deer') { tone('sawtooth', 700, 380, 0.25, 0.25, 0, 1200); }
+    else if (kind === 'bat') { for (let i = 0; i < 3; i++) tone('sine', 4200, 3000, 0.04, 0.12, i * 0.07); }
+    else if (kind === 'squirrel') { for (let i = 0; i < 5; i++) tone('triangle', 2400, 3200, 0.05, 0.12, i * 0.06); }
+    else { const n = this.noiseSrc(), f = ctx.createBiquadFilter(), g = ctx.createGain(); f.type = 'highpass'; f.frequency.value = 3000; g.gain.setValueAtTime(0.15, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25); n.connect(f).connect(g).connect(this.master); n.start(t); n.stop(t + 0.3); }
+  }
+
+  // 퀸드라 톤: 아폴로 관제센터 무전 '삐-'(2525 Hz, 0.25초)
+  quindar() {
+    const ctx = this.ensure();
+    if (!ctx || !this.on) return;
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = 2525;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.08, t + 0.01);
+    g.gain.setValueAtTime(0.08, t + 0.24);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+    o.connect(g).connect(this.master);
+    o.start(t); o.stop(t + 0.27);
+  }
+
+  // 눈 밟는 소리(뽀드득)
+  crunch() {
+    const ctx = this.ensure();
+    if (!ctx || !this.on) return;
+    const t = ctx.currentTime;
+    const n = this.noiseSrc();
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 1800; bp.Q.value = 1.2;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    n.connect(bp).connect(g).connect(this.master);
+    n.start(t); n.stop(t + 0.13);
+  }
+
+  // 태권도 기합 "얍!"
+  kihap() {
+    const ctx = this.ensure();
+    if (!ctx || !this.on) return;
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(260, t);
+    o.frequency.linearRampToValueAtTime(330, t + 0.05);
+    o.frequency.exponentialRampToValueAtTime(190, t + 0.28);
+    const f1 = ctx.createBiquadFilter(), f2 = ctx.createBiquadFilter();
+    f1.type = f2.type = 'bandpass'; f1.frequency.value = 800; f1.Q.value = 5; f2.frequency.value = 1250; f2.Q.value = 6;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.5, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+    o.connect(f1).connect(g); o.connect(f2).connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + 0.32);
+  }
+
+  // 하모니홀 팡파레(직접 작곡한 짧은 오케스트라풍 곡): 금관 선율 + 현악 화음 + 팀파니
+  fanfare() {
+    const ctx = this.ensure();
+    if (!ctx || !this.on) return;
+    const t0 = ctx.currentTime + 0.05;
+    const N = (n) => 440 * Math.pow(2, (n - 69) / 12);
+    const voice = (midi, t, d, type, gain, cut) => {
+      const o = ctx.createOscillator(), o2 = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      o.type = o2.type = type; o.frequency.value = N(midi); o2.frequency.value = N(midi) * 1.004;
+      f.type = 'lowpass'; f.frequency.value = cut; f.Q.value = 0.7;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.06);
+      g.gain.setValueAtTime(gain, t + d * 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.connect(f); o2.connect(f); f.connect(g).connect(this.master);
+      o.start(t); o2.start(t); o.stop(t + d + 0.05); o2.stop(t + d + 0.05);
+    };
+    // 화음 진행: C – Am – F – G – C (현악)
+    const chords = [[48, 60, 64, 67], [45, 57, 60, 64], [41, 57, 60, 65], [43, 55, 59, 62], [48, 60, 64, 67, 72]];
+    chords.forEach((ch, i) => ch.forEach((m) => voice(m, t0 + i * 0.8, i === 4 ? 1.6 : 0.85, 'sawtooth', 0.035, 1400)));
+    // 금관 선율(하모니홀을 위한 새 선율)
+    const mel = [[67, 0, 0.3], [72, 0.3, 0.5], [76, 0.8, 0.3], [74, 1.1, 0.5], [72, 1.6, 0.3], [69, 1.9, 0.5], [71, 2.4, 0.3], [74, 2.7, 0.5], [79, 3.2, 1.2]];
+    mel.forEach(([m, at, d]) => voice(m, t0 + at, d, 'square', 0.05, 2200));
+    // 팀파니
+    for (const at of [0, 1.6, 3.2]) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(N(36) * 1.6, t0 + at); o.frequency.exponentialRampToValueAtTime(N(36), t0 + at + 0.3);
+      g.gain.setValueAtTime(0.0001, t0 + at); g.gain.exponentialRampToValueAtTime(0.5, t0 + at + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.9);
+      o.connect(g).connect(this.master); o.start(t0 + at); o.stop(t0 + at + 1);
+    }
   }
 }

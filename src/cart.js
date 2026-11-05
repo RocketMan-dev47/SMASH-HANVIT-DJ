@@ -119,8 +119,14 @@ export class GolfCart {
     const T = this.terrain;
     const hf = T.heightAt(x + dx * 1.2, z + dz * 1.2), hb = T.heightAt(x - dx * 1.2, z - dz * 1.2);
     const bob = this.lift ? Math.sin(performance.now() / 300) * 0.35 : Math.sin(performance.now() / 90) * 0.015;
-    this.model.position.set(x, T.heightAt(x, z) + (this.lift || 0) + bob, z);
-    this.model.rotation.set(-Math.atan2(hf - hb, 2.4), Math.atan2(dx, dz), 0);
+    // 높이를 부드럽게 따라가요(지형이 울퉁불퉁해도 덜컹거리지 않게)
+    const gy = T.heightAt(x, z);
+    this.sy = this.sy === undefined || Math.abs(this.sy - gy) > 4 ? gy : this.sy + (gy - this.sy) * 0.18;
+    this.model.position.set(x, this.sy + (this.lift || 0) + bob, z);
+    // 앞뒤 기울기도 너무 가파르지 않게(최대 약 14°) 부드럽게
+    const pitch = Math.max(-0.25, Math.min(0.25, -Math.atan2(hf - hb, 2.4)));
+    this.sp = this.sp === undefined ? pitch : this.sp + (pitch - this.sp) * 0.15;
+    this.model.rotation.set(this.sp, Math.atan2(dx, dz), 0);
   }
 
   update(dt) {

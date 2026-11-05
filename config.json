@@ -24,8 +24,8 @@
   ],
   "launchSite": null,
   "golfCart": true,
-  "supabaseUrl": "",
-  "supabaseKey": "",
+  "supabaseUrl": "https://uoeznijvbgnugwbdcfgg.supabase.co",
+  "supabaseKey": "sb_publishable_3vAnWHqhMDz2L55IP8UbXw_yaKSkad5",
   "buildings": {
     "w1228972445": {
       "name": "본관",
@@ -170,24 +170,6 @@
   ],
   "canopies": [
     {
-      "name": "아트플라자",
-      "center": [
-        -6.2,
-        -24.8
-      ],
-      "size": [
-        11,
-        11
-      ],
-      "angle": -118,
-      "colors": [
-        "#e8452c",
-        "#f6c445",
-        "#f08a24",
-        "#d8282f"
-      ]
-    },
-    {
       "name": "에듀플라자",
       "center": [
         38,
@@ -204,33 +186,69 @@
         "#2f6fe0",
         "#ffffff"
       ]
+    },
+    {
+      "name": "아트플라자",
+      "center": [
+        -6,
+        -29.5
+      ],
+      "size": [
+        8,
+        8
+      ],
+      "angle": -118,
+      "colors": [
+        "#e8452c",
+        "#f6c445",
+        "#f08a24",
+        "#d8282f"
+      ]
+    },
+    {
+      "name": "스포츠플라자",
+      "center": [
+        -13,
+        20
+      ],
+      "size": [
+        10,
+        8
+      ],
+      "angle": 62,
+      "colors": [
+        "#f6c445",
+        "#e8452c",
+        "#2f6fe0",
+        "#ffffff"
+      ]
     }
   ],
   "stream": {
     "path": [
       [
-        -7.23,
-        -40.66
+        -27,
+        -17
       ],
       [
-        -3.93,
-        -34.49
+        -22,
+        -17.5
       ],
       [
-        -1.1,
-        -29.19
+        -17,
+        -17.5
       ],
       [
-        1.72,
-        -23.89
+        -12.5,
+        -17
       ],
       [
-        4.55,
-        -18.59
+        -8.5,
+        -18
       ]
     ],
     "width": 2.2,
-    "drop": 0.45,
+    "drop": 0.35,
     "pond": [
       6,
       3.4
@@ -238,11 +256,33 @@
   },
   "donate": {
     "link": "",
-    "label": "토스로 후원하기"
+    "label": "토스로 후원하기",
+    "message": "이 게임은 한빛고 학생이 직접 만든 비공식 팬 게임이에요. 재밌게 했다면 작은 응원을 보내 주세요!"
   },
   "neis": {
     "atpt": "G10",
     "name": "대전한빛고등학교"
   },
-  "weather": true
+  "weather": true,
+  "recycling": {
+    "center": [
+      -36,
+      -30
+    ],
+    "angle": 30
+  },
+  "bus": {
+    "at": [
+      62.1,
+      -35.3
+    ],
+    "yaw": -52,
+    "routes": []
+  },
+  "turtleRock": {
+    "at": [
+      -105,
+      73
+    ]
+  }
 }

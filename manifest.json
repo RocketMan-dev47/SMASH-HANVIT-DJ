@@ -1,0 +1,17 @@
+{
+  "name": "SMASH 한빛",
+  "short_name": "SMASH 한빛",
+  "description": "대전한빛고등학교를 실제 지도 그대로 옮긴 부수기·둘러보기 게임",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d1838",
+  "theme_color": "#0d1838",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

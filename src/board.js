@@ -11,8 +11,22 @@ function uuid() {
   });
 }
 
+// 시즌: 1학기(3~8월), 2학기(9~2월). 시즌마다 순위가 새로 시작돼요.
+export function seasonOf(d = new Date()) {
+  const y = d.getFullYear(), m = d.getMonth() + 1;
+  if (m >= 3 && m <= 8) return { key: `${y}-1`, name: `${y} 1학기` };
+  const yy = m <= 2 ? y - 1 : y;
+  return { key: `${yy}-2`, name: `${yy} 2학기` };
+}
+export function prevSeason(key) {
+  const [y, t] = key.split('-').map(Number);
+  return t === 1 ? { key: `${y - 1}-2`, name: `${y - 1} 2학기` } : { key: `${y}-1`, name: `${y} 1학기` };
+}
+
 export class GradeBoard {
   constructor(cfg) {
+    this.season = seasonOf();
+    this.lkey = `${LOCAL}:${this.season.key}`;
     this.url = (cfg.supabaseUrl || '').replace(/\/$/, '');
     this.key = cfg.supabaseKey || '';
     this.online = !!(this.url && this.key);
@@ -23,7 +37,7 @@ export class GradeBoard {
   }
 
   headers() {
-    return { apikey: this.key, Authorization: `Bearer ${this.key}`, 'Content-Type': 'application/json' };
+    return { apikey: this.key, ...(String(this.key).startsWith('sb_') ? {} : { Authorization: `Bearer ${this.key}` }), 'Content-Type': 'application/json' };
   }
 
   setGrade(g) {
@@ -46,7 +60,7 @@ export class GradeBoard {
 
   localRows() {
     let data = {};
-    try { data = JSON.parse(localStorage.getItem(LOCAL) || '{}'); } catch { /* 무시 */ }
+    try { data = JSON.parse(localStorage.getItem(this.lkey) || '{}'); } catch { /* 무시 */ }
     return [1, 2, 3].map((g) => ({ grade: g, total: data[g]?.total || 0, runs: data[g]?.runs || 0, best: data[g]?.best || 0 }));
   }
 
@@ -57,11 +71,11 @@ export class GradeBoard {
       this.send(true);
     } else {
       let data = {};
-      try { data = JSON.parse(localStorage.getItem(LOCAL) || '{}'); } catch { /* 무시 */ }
+      try { data = JSON.parse(localStorage.getItem(this.lkey) || '{}'); } catch { /* 무시 */ }
       const r = data[this.grade] || { total: 0, runs: 0, best: 0 };
       r.total += this.runScore; r.runs += 1; r.best = Math.max(r.best, this.runScore);
       data[this.grade] = r;
-      try { localStorage.setItem(LOCAL, JSON.stringify(data)); } catch { /* 무시 */ }
+      try { localStorage.setItem(this.lkey, JSON.stringify(data)); } catch { /* 무시 */ }
       this.rows = this.localRows();
     }
     this.newRun();
@@ -74,7 +88,7 @@ export class GradeBoard {
     try {
       await fetch(`${this.url}/rest/v1/rpc/submit_run`, {
         method: 'POST', headers: this.headers(), keepalive: final,
-        body: JSON.stringify({ p_run: this.runId, p_grade: this.grade, p_score: Math.round(this.runScore) }),
+        body: JSON.stringify({ p_run: this.runId, p_grade: this.grade, p_score: Math.round(this.runScore), p_season: this.season.key }),
       });
     } catch { /* 연결이 안 되면 다음에 다시 */ }
   }
@@ -82,7 +96,7 @@ export class GradeBoard {
   async refresh() {
     if (!this.online) { this.rows = this.localRows(); return this.rows; }
     try {
-      const r = await fetch(`${this.url}/rest/v1/grade_board?select=*`, { headers: this.headers() });
+      const r = await fetch(`${this.url}/rest/v1/grade_board?select=*&season=eq.${this.season.key}`, { headers: this.headers() });
       if (!r.ok) throw new Error(r.status);
       const data = await r.json();
       this.rows = [1, 2, 3].map((g) => {
@@ -91,5 +105,25 @@ export class GradeBoard {
       });
     } catch { /* 이전 값 유지 */ }
     return this.rows;
+  }
+
+  // 지난 시즌 우승 학년(없으면 null)
+  async lastWinner() {
+    const prev = prevSeason(this.season.key);
+    let rows = null;
+    if (this.online) {
+      try {
+        const r = await fetch(`${this.url}/rest/v1/grade_board?select=*&season=eq.${prev.key}`, { headers: this.headers() });
+        if (r.ok) rows = (await r.json()).map((d) => ({ grade: Number(d.grade), total: Number(d.total) || 0 }));
+      } catch { /* 무시 */ }
+    } else {
+      try {
+        const data = JSON.parse(localStorage.getItem(`${LOCAL}:${prev.key}`) || '{}');
+        rows = [1, 2, 3].map((g) => ({ grade: g, total: data[g]?.total || 0 }));
+      } catch { rows = null; }
+    }
+    if (!rows) return null;
+    const top = rows.sort((a, b) => b.total - a.total)[0];
+    return top && top.total > 0 ? { grade: top.grade, season: prev.name } : null;
   }
 }

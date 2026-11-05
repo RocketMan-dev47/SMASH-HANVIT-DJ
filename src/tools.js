@@ -12,6 +12,7 @@ export const TOOL_DEFS = [
   { id: 'meteor', name: '운석', R: 17, hint: '우주에서부터 불타며 떨어져요', icon: svg('<circle cx="18.5" cy="18.5" r="6"/><path d="M4 4l10 10M9 3.5l7 7M3.5 9l7 7"/>') },
   { id: 'quake', name: '지진', R: 42, options: 'quake', hint: '진도를 골라 주변 건물을 흔들어 무너뜨려요', icon: svg('<path d="M3 15h4l2.5-6 4 12 3.5-9 2 3H25"/>') },
   { id: 'landslide', name: '산사태', R: 14, hint: '산 위에서 바위가 굴러 내려와요', icon: svg('<path d="M3 23L12 8l5 7 3-4 5 12z"/><circle cx="19" cy="20" r="2"/><circle cx="14" cy="21.5" r="1.4"/>') },
+  { id: 'tkd', name: '태권도', R: 6.5, hint: '거대한 사범이 나타나 격파해요(누를 때마다 기술이 바뀌고, 쓸수록 띠가 올라가요)', icon: svg('<circle cx="17" cy="5.5" r="2.2"/><path d="M16 8.5l-3 6 4 2.5"/><path d="M13 14.5L7 13l-3 1"/><path d="M17 17l1 7"/><path d="M15.5 9.5l5 1.5M14 10l-4-1.5"/><path d="M12.5 15h3"/>') },
   { id: 'robodog', name: '로봇개', R: 2.2, hint: '화염방사기를 단 로봇개를 직접 조종해요(누른 곳에 내려와요)', icon: svg('<rect x="6" y="9" width="15" height="7" rx="2.5"/><path d="M21 11.5h3.5v3H21"/><path d="M9 16l-1.5 6M18 16l1.5 6M12 16l-.8 6M15.5 16l.8 6"/><path d="M10 9V6.5h6V9"/><path d="M16 7.7h5"/>') },
   { id: 'rocket', name: '로켓', R: 15, hint: '운동장 발사대에서 2단 로켓을 쏴요', icon: svg('<path d="M14 3c3.5 3 4.5 7 4.5 11.5L14 20l-4.5-5.5C9.5 10 10.5 6 14 3z"/><path d="M9.5 15L6 19l3.5.8M18.5 15l3.5 4-3.5.8"/><path d="M12.5 22.5L14 26l1.5-3.5"/>') },
   { id: 'nuke', name: '핵폭탄', R: 38, hint: '목표를 찍으면 KF-21이 날아와 떨어뜨려요', icon: svg('<circle cx="14" cy="14" r="1.9"/><path d="M11.90 10.36 L8.75 4.91 A10.5 10.5 0 0 1 19.25 4.91 L16.10 10.36 A4.2 4.2 0 0 0 11.90 10.36Z"/><path d="M18.20 14.00 L24.50 14.00 A10.5 10.5 0 0 1 19.25 23.09 L16.10 17.64 A4.2 4.2 0 0 0 18.20 14.00Z"/><path d="M11.90 17.64 L8.75 23.09 A10.5 10.5 0 0 1 3.50 14.00 L9.80 14.00 A4.2 4.2 0 0 0 11.90 17.64Z"/>') },
@@ -168,6 +169,9 @@ export class Tools {
       case 'bat':
         this.swing(P);
         break;
+      case 'tkd':
+        w.taekwondo?.kick(P);
+        break;
       case 'meteor': {
         // 우주(약 4 km 위)에서 출발해 대기권에 들어오며 불타올라요.
         const dir = this.meteorDir;
@@ -197,7 +201,7 @@ export class Tools {
         this.landslide(P);
         break;
       case 'rocket':
-        if (!w.rocket.launch(P)) w.ui.toast('로켓 준비 중', '발사대에 새 로켓이 올라오고 있어요');
+        if (!w.rocket.launch(P)) { const r = w.rocket.remaining?.(); w.ui.toast('로켓 재조립 중', r ? `운반차가 2단을 올리고 있어요 · ${r}초 남음` : '아직 비행 중이에요'); }
         break;
       case 'nuke':
         // 핵폭탄은 위치 지정 패드에서 목표를 찍고 발사해요(main.js 참고).
@@ -251,7 +255,7 @@ export class Tools {
         const res = w.explode(C, { tool: 'bat', R: b.S.R * 1.25, power: b.S.power, fx: false, sound: false, crater: false, scorch: false, weight: 0.8 });
         w.fx.impact(b.P, b.S.R);
         w.sound.crack(res.volume > 600);
-        if (res.volume > 600) w.ui.toast('홈런!', '담장을 넘어갔어요', 'gold');
+        if (res.volume > 600) { w.ui.toast('홈런!', '담장을 넘어갔어요', 'gold'); w.onHomerun?.(b.S.name); }
       }
       if (b.t > swingT + 0.25) b.pivot.scale.setScalar(Math.max(0.001, 1 - (b.t - swingT - 0.25) / 0.3));
       if (b.t > swingT + 0.6) { w.scene.remove(b.pivot); this.bats.splice(i, 1); }

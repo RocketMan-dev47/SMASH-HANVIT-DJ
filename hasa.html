@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>HASA 관제센터 · SMASH 한빛 텔레메트리</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<style>
+  :root {
+    --bg: #050b1a; --panel: rgba(16, 28, 58, 0.72); --line: rgba(143, 211, 255, 0.14); --text: #eef3ff; --text2: rgba(238, 243, 255, 0.7);
+    --text3: rgba(238, 243, 255, 0.45); --cyan: #8fd3ff; --amber: #ffc94a; --green: #34c759; --red: #ff453a; --orange: #ff9f43;
+    --font: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
+  body { min-height: 100vh; background: radial-gradient(1200px 600px at 20% -10%, rgba(11, 61, 145, 0.35), transparent 60%), radial-gradient(900px 500px at 110% 10%, rgba(252, 61, 33, 0.12), transparent 60%), var(--bg); padding: calc(18px + env(safe-area-inset-top)) 18px 40px; }
+  button, select, input { font: inherit; color: inherit; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; margin-bottom: 16px; }
+  .brand { display: flex; align-items: center; gap: 12px; margin-right: auto; }
+  .brand svg { width: 44px; height: 44px; }
+  .brand b { display: block; font-size: 12px; letter-spacing: 0.22em; color: var(--cyan); }
+  .brand h1 { margin: 2px 0 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+  .ctrl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .seg { display: inline-flex; padding: 3px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); }
+  .seg button { border: 0; background: none; padding: 7px 12px; border-radius: 9px; font-size: 13px; font-weight: 650; color: var(--text2); cursor: pointer; }
+  .seg button.on { background: var(--cyan); color: #04122b; }
+  .btn { padding: 8px 14px; border-radius: 11px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); font-size: 13px; font-weight: 650; cursor: pointer; }
+  .btn.amber { background: var(--amber); color: #2a1d00; border-color: transparent; }
+  #status { font-size: 12px; color: var(--text3); }
+  #status i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; box-shadow: 0 0 8px var(--green); }
+  #status.off i { background: var(--text3); box-shadow: none; }
+  .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+  .panel { grid-column: span 6; padding: 14px 16px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); min-width: 0; }
+  .panel.w4 { grid-column: span 4; } .panel.w8 { grid-column: span 8; } .panel.w12 { grid-column: span 12; } .panel.w3 { grid-column: span 3; }
+  .panel h2 { margin: 0 0 10px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--cyan); text-transform: uppercase; display: flex; justify-content: space-between; }
+  .panel h2 em { font-style: normal; letter-spacing: 0; color: var(--text3); font-weight: 600; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .kpi { padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+  .kpi span { font-size: 11.5px; color: var(--text3); font-weight: 600; }
+  .kpi b { display: block; margin-top: 4px; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .kpi small { font-size: 11px; color: var(--text2); }
+  canvas { display: block; width: 100%; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 11px; color: var(--text3); font-weight: 700; letter-spacing: 0.04em; }
+  tr.click { cursor: pointer; } tr.click:hover td { background: rgba(143, 211, 255, 0.06); }
+  .scroll { max-height: 360px; overflow: auto; }
+  .tag { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, 0.08); }
+  .tag.error { background: rgba(255, 69, 58, 0.2); color: #ff8a80; } .tag.tool { background: rgba(255, 159, 67, 0.2); color: #ffc58a; }
+  .tag.badge { background: rgba(255, 201, 74, 0.2); color: var(--amber); } .tag.session_start, .tag.session_end { background: rgba(52, 199, 89, 0.18); color: #8fe3a5; }
+  .tag.open { background: rgba(143, 211, 255, 0.16); color: var(--cyan); }
+  code { font-size: 11.5px; color: var(--text2); word-break: break-all; }
+  #gate { max-width: 520px; margin: 60px auto; padding: 24px; border-radius: 22px; background: var(--panel); border: 1px solid var(--line); }
+  #gate h2 { margin: 0 0 8px; }
+  #gate p { color: var(--text2); font-size: 13.5px; line-height: 1.6; }
+  #gate input { width: 100%; padding: 11px 13px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); margin: 8px 0 12px; }
+  #drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); background: #071330; border-left: 1px solid var(--line); padding: 18px; overflow: auto; transform: translateX(100%); transition: transform 0.3s; z-index: 10; }
+  #drawer.open { transform: none; }
+  #drawer h3 { margin: 0 0 4px; } #drawer p { margin: 0 0 12px; color: var(--text3); font-size: 12px; }
+  .empty { color: var(--text3); font-size: 13px; padding: 20px 0; text-align: center; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; font-size: 11.5px; color: var(--text2); }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  @media (max-width: 1100px) { .panel, .panel.w4, .panel.w8, .panel.w3 { grid-column: span 12; } }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="#0b3d91"/><ellipse cx="32" cy="33" rx="27" ry="9.6" fill="none" stroke="#fff" stroke-width="1" transform="rotate(-20 32 33)"/><path d="M8 50 Q29 33 61 11 L52 23 Q37 32 19 50 Z" fill="#fc3d21"/><text x="32" y="38" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-style="italic" font-weight="800" font-size="16" fill="#fff">HASA</text></svg>
+      <div><b>HASA MISSION CONTROL</b><h1>한빛 관제센터 · 텔레메트리</h1></div>
+    </div>
+    <div class="ctrl">
+      <div class="seg" id="src"><button data-v="server" class="on">서버(전체)</button><button data-v="local">이 기기</button></div>
+      <div class="seg" id="range"><button data-v="1">오늘</button><button data-v="7" class="on">7일</button><button data-v="30">30일</button><button data-v="3650">전체</button></div>
+      <button class="btn" id="refresh">새로고침</button>
+      <label class="btn"><input type="checkbox" id="auto" checked> 30초 자동</label>
+      <button class="btn" id="csv">CSV 내보내기</button>
+      <button class="btn" id="logout">키 지우기</button>
+      <a class="btn amber" href="./">게임으로 ↩</a>
+    </div>
+    <div id="status"><i></i><span>대기</span></div>
+  </header>
+
+  <section id="gate" hidden>
+    <h2>관리자 키가 필요해요</h2>
+    <p>서버에 모인 전체 기록은 Supabase에 정해 둔 <b>관리자 키</b>가 있어야 볼 수 있어요. 키는 이 브라우저에만 저장되고, 게임 코드에는 들어 있지 않아요.</p>
+    <input id="key" type="password" placeholder="관리자 키" autocomplete="off">
+    <button class="btn amber" id="keyGo">접속</button>
+    <button class="btn" id="useLocal">이 기기 기록만 보기</button>
+    <p id="gateMsg"></p>
+  </section>
+
+  <main id="dash" class="grid" hidden>
+    <section class="panel w12"><h2>개요 <em id="span"></em></h2><div class="kpis" id="kpis"></div></section>
+    <section class="panel w8"><h2>일별 세션 <em>세션 수 · 평균 플레이(분)</em></h2><canvas id="cDaily" height="200"></canvas></section>
+    <section class="panel w4"><h2>기기</h2><canvas id="cDevice" height="200"></canvas><div class="legend" id="lDevice"></div></section>
+    <section class="panel w8"><h2>접속 시간대 <em>요일 × 시각 (세션 시작)</em></h2><canvas id="cHeat" height="210"></canvas></section>
+    <section class="panel w4"><h2>프레임 속도 <em>1분 평균 FPS 분포</em></h2><canvas id="cFps" height="210"></canvas></section>
+    <section class="panel w4"><h2>무기 사용</h2><canvas id="cTools" height="260"></canvas></section>
+    <section class="panel w4"><h2>기능 사용 <em>열어 본 창</em></h2><canvas id="cOpen" height="260"></canvas></section>
+    <section class="panel w4"><h2>무너진 건물</h2><canvas id="cBldg" height="260"></canvas></section>
+    <section class="panel w4"><h2>배지 획득</h2><canvas id="cBadge" height="260"></canvas></section>
+    <section class="panel w4"><h2>도감 발견</h2><canvas id="cDex" height="260"></canvas></section>
+    <section class="panel w4"><h2>설정 선택 <em>모드·시간·날씨</em></h2><canvas id="cPref" height="260"></canvas></section>
+    <section class="panel w12"><h2>건의함 <em id="sgCount"></em></h2><div class="scroll"><table id="tSuggest"></table></div></section>
+    <section class="panel w12"><h2>오류 로그 <em id="errCount"></em></h2><div class="scroll"><table id="tErr"></table></div></section>
+    <section class="panel w6"><h2>세션 <em>눌러서 자세히</em></h2><div class="scroll"><table id="tSess"></table></div></section>
+    <section class="panel w6"><h2>실시간 이벤트 <em>최근 150개</em></h2><div class="scroll"><table id="tLive"></table></div></section>
+  </main>
+
+  <aside id="drawer" aria-label="세션 상세"><button class="btn" id="drawerClose">닫기</button><h3 id="dTitle"></h3><p id="dSub"></p><table id="dTable"></table></aside>
+
+  <script type="module" src="src/console.js"></script>
+</body>
+</html>

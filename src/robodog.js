@@ -110,15 +110,22 @@ export class RoboDog {
     return false;
   }
 
+  // 몸통(반지름 1.1 m)과 머리 끝(앞 1 m)이 모두 비어 있어야 지나가요.
   blocked(x, z) {
-    const T = this.w.terrain;
-    if (!T.inside(x, z)) return true;
-    for (const b of this.w.buildings.list) {
-      if (b.lostFraction() > 0.55) continue;
-      if (x < b.minX - 1 || x > b.maxX + 1 || z < b.minZ - 1 || z > b.maxZ + 1) continue;
-      if (pointInPolygon([x, z], b.poly)) return true;
+    const O = this.w.obstacles;
+    if (!O) return !this.w.terrain.inside(x, z) || this.w.buildings.list.some((b) => !b.launched && b.lostFraction() <= 0.55 && pointInPolygon([x, z], b.poly));
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    // 몸통 가운데 + 머리 끝 + 엉덩이 끝 세 곳을 봐요(옆으로 돌 때 꼬리가 벽에 박히지 않게).
+    return O.blocked(x, z, 1.1, { treesToo: true }) || O.blocked(x + fx * 1.0, z + fz * 1.0, 0.5) || O.blocked(x - fx * 0.9, z - fz * 0.9, 0.5);
+  }
+
+  unstick() {
+    for (let r = 1; r <= 14; r += 1) {
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2, x = this.pos.x + Math.cos(a) * r, z = this.pos.z + Math.sin(a) * r;
+        if (!this.blocked(x, z)) { this.pos.x = x; this.pos.z = z; return; }
+      }
     }
-    return false;
   }
 
   update(dt, camera) {
@@ -131,12 +138,19 @@ export class RoboDog {
     if (!this.active) { fwd = 0; turn = 0; }
     fwd = Math.max(-1, Math.min(1, fwd));
     turn = Math.max(-1, Math.min(1, turn));
-    this.yaw -= turn * 2.2 * dt;
+    // 회전은 천천히(화면이 빨리 돌지 않게)
+    this.turnV = (this.turnV || 0) + (turn * 1.25 - (this.turnV || 0)) * Math.min(1, dt * 4);
+    this.yaw -= this.turnV * dt;
     const target = fwd * 6;
     this.speed += (target - this.speed) * Math.min(1, dt * 6);
     const dir = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
     const nx = this.pos.x + dir.x * this.speed * dt, nz = this.pos.z + dir.z * this.speed * dt;
-    if (!this.blocked(nx, nz)) { this.pos.x = nx; this.pos.z = nz; } else this.speed *= 0.3;
+    if (!this.blocked(nx, nz)) { this.pos.x = nx; this.pos.z = nz; }
+    else if (!this.blocked(nx, this.pos.z)) { this.pos.x = nx; this.speed *= 0.8; } // 벽을 따라 미끄러지기
+    else if (!this.blocked(this.pos.x, nz)) { this.pos.z = nz; this.speed *= 0.8; }
+    else this.speed *= 0.3;
+    // 무너진 조각이 다시 쌓이거나 처음 내려앉은 곳이 막혀 있으면, 가까운 빈 곳으로 살짝 밀려나요.
+    if (this.blocked(this.pos.x, this.pos.z)) this.unstick();
     this.pos.y = w.terrain.heightAt(this.pos.x, this.pos.z);
     this.g.position.copy(this.pos);
     this.g.rotation.y = this.yaw;
@@ -152,6 +166,7 @@ export class RoboDog {
     body.position.y = (this.active ? 1.05 : 0.8) + Math.abs(Math.sin(ph)) * 0.04 * moving;
     // 화염
     if (this.flaming && this.active) {
+      this.flameTime = (this.flameTime || 0) + dt;
       const n = new THREE.Vector3();
       nozzle.getWorldPosition(n);
       for (let i = 0; i < 7; i++) {
@@ -179,8 +194,8 @@ export class RoboDog {
       // 3인칭 카메라: 로봇개 뒤에서 살짝 위
       const want = this.pos.clone().addScaledVector(dir, -9).add(new THREE.Vector3(0, 4.8, 0));
       const look = this.pos.clone().addScaledVector(dir, 5).add(new THREE.Vector3(0, 1.2, 0));
-      this.camPos.lerp(want, 1 - Math.exp(-dt * 5));
-      this.camLook.lerp(look, 1 - Math.exp(-dt * 8));
+      this.camPos.lerp(want, 1 - Math.exp(-dt * 2.6));
+      this.camLook.lerp(look, 1 - Math.exp(-dt * 4));
       camera.position.copy(this.camPos);
       camera.lookAt(this.camLook);
     }

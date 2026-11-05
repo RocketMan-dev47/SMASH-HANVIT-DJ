@@ -10,6 +10,7 @@ const NOSE = [[47, 1710], [45.3, 1743], [43.7, 1767], [40.9, 1815], [37.4, 1839]
 const TIP = [[14.3, 1993], [12.9, 1998], [10.3, 2013], [7.5, 2028], [4.6, 2038], [1.6, 2053], [0.01, 2060]];
 const FIN = [[47, 10], [113.4, -56.4], [113.6, 24.6], [47, 310]];
 const SPLIT = 1510; // 1단·2단이 나뉘는 커플러 위치
+const TRK_SCALE = 0.3;
 export const HFV = { length: 2060 * MM, split: SPLIT * MM, radius: 47 * MM };
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -278,7 +279,7 @@ export class RocketSystem {
     this.dir = UP.clone();
     this.impactAt = -99;
     this.setArms(1);
-    this.stack(true);
+    this.stack(true, null, true);
   }
 
   get busy() { return this.state !== 'idle'; }
@@ -290,26 +291,82 @@ export class RocketSystem {
     if (this.state === 'idle' || this.state === 'stack') this.reset();
   }
 
-  setArms(open) {
-    for (const a of this.arms) a.pivot.rotation.y = a.side * 0.95 * open;
+  setArms(open, swing = this.armSwing || 0) {
+    this.armSwing = swing;
+    for (const a of this.arms) a.pivot.rotation.y = a.side * 0.95 * open + swing;
   }
 
-  stack(fresh, reuse = null) {
+  // 팔이 swing만큼 돌았을 때 붙잡는 점(발사대 가운데를 팔 축 둘레로 돌린 곳)의 수평 위치
+  gripAt(swing) {
+    const pv = new THREE.Vector3();
+    this.arms[0].pivot.updateWorldMatrix?.(true, false); // 첫 프레임 전에도 정확한 위치
+    this.arms[0].pivot.getWorldPosition(pv);
+    const rx = this.base.x - pv.x, rz = this.base.z - pv.z, c = Math.cos(swing), sn = Math.sin(swing);
+    return new THREE.Vector3(pv.x + rx * c + rz * sn, this.base.y, pv.z - rx * sn + rz * c);
+  }
+
+  // 2단 운반차(바퀴 많은 납작한 차)
+  transporter() {
+    const g = new THREE.Group();
+    const steel = new THREE.MeshStandardMaterial({ color: 0x5d6268, roughness: 0.6, metalness: 0.4 });
+    const yellow = new THREE.MeshStandardMaterial({ color: 0xf2c94c, roughness: 0.5 });
+    const tire = new THREE.MeshStandardMaterial({ color: 0x18191b, roughness: 0.9 });
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(7, 0.9, 10), steel);
+    deck.position.y = 1.35; g.add(deck);
+    for (const sx of [-1, 1]) { const st = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.25, 10.05), yellow); st.position.set(sx * 3.55, 1.45, 0); g.add(st); }
+    const cradle = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.4, 0.5, 24, 1, true), steel);
+    cradle.position.y = 2.0; g.add(cradle);
+    for (let i = 0; i < 4; i++) for (const sx of [-1, 1]) {
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.6, 14).rotateZ(Math.PI / 2), tire);
+      w.position.set(sx * 3.0, 0.55, -3.9 + i * 2.6); g.add(w);
+    }
+    for (const o of g.children) o.castShadow = true;
+    g.scale.setScalar(TRK_SCALE); // 로켓(지름 0.7 m) 크기에 맞춘 운반차
+    return g;
+  }
+
+  // 젓가락 팔 높이(발사대 바닥 기준 grip 높이)
+  setArmHeight(y) {
+    for (const a of this.arms) a.pivot.position.y = 1.3 + y;
+  }
+
+  // 다시 쌓기: 실제 발사장처럼 발사탑 젓가락 팔이 단을 붙잡고 '위에서' 내려와 올려놓아요.
+  // 처음(fresh)이면 1단을 먼저 내려놓고, 그다음 2단을 1단 위에 내려놓아요. 회수 직후면 2단만.
+  // ready: 처음 열었을 때·다시 짓기는 이미 조립된 상태로 바로 준비 완료
+  stack(fresh, reuse = null, ready = false) {
     this.root = new THREE.Group();
     this.root.position.copy(this.base);
     const xmas = this.theme === 'xmas';
     this.s1 = reuse || (xmas ? xmasBooster(this.M) : boosterModel(this.M));
-    this.s1.position.set(0, 0, 0);
+    this.s1.position.set(0, fresh ? 14 : 0, 0);
     this.s1.quaternion.identity();
-    this.s1.scale.set(1, fresh ? 0.001 : 1, 1);
+    this.s1.scale.set(1, 1, 1);
     this.s2 = xmas ? xmasUpper(this.M) : upperModel(this.M);
-    this.s2.scale.set(1, 0.001, 1);
+    this.s2.scale.set(1, 1, 1);
+    this.s2.position.set(0, 0, 0);
+    this.s2.visible = false;
+    this.armSwing = 0;
+    // 2단은 하늘에서 생기지 않아요: 운반차에 실려 들어와요.
+    if (this.trk) this.w.scene.remove(this.trk);
+    this.trk = this.transporter();
+    this.trk.visible = false;
+    this.w.scene.add(this.trk);
     this.root.add(this.s1, this.s2);
     this.w.scene.add(this.root);
     this.state = 'stack';
     this.t = 0;
     this.freshStack = fresh;
+    this.stackEnd = (fresh ? 2.8 : 0) + 11.2;
+    if (ready) {
+      this.s1.position.set(0, 0, 0); this.s2.position.set(0, 0, 0); this.s2.visible = true;
+      this.w.scene.remove(this.trk); this.trk = null;
+      this.setArms(1, 0); this.setArmHeight(CATCH_LIFT + 1300 * MM);
+      this.state = 'idle';
+    }
   }
+
+  // 재조립까지 남은 초(준비됐으면 0)
+  remaining() { return this.state === 'stack' ? Math.max(1, Math.ceil(this.stackEnd - this.t)) : 0; }
 
   launch(target) {
     if (this.state !== 'idle') return false;
@@ -384,7 +441,7 @@ export class RocketSystem {
     this.w.director?.play(() => {
       const T = this.t;
       if (this.state === 'idle') return null;
-      if (this.state === 'stack') return this.t < 1.2 ? { key: 'restack', pos: base.clone().addScaledVector(across, 26).addScaledVector(toSchool, -12).add(up(14)), look: base.clone().add(up(8)), snap: 2 } : null;
+      if (this.state === 'stack') return this.t < this.stackEnd - 0.6 ? { key: 'restack', pos: base.clone().addScaledVector(across, 26).addScaledVector(toSchool, -12).add(up(14)), look: base.clone().add(up(8)), snap: 2 } : null;
       if (T < 1.5) {
         return { key: 'pad', cut: true, pos: base.clone().addScaledVector(across, 24).addScaledVector(toSchool, -16).add(up(4)), look: base.clone().add(up(9 + Math.max(0, T) * 22)), snap: 3.5 };
       }
@@ -418,11 +475,65 @@ export class RocketSystem {
     this.t += dt;
 
     if (this.state === 'stack') {
-      const k = ease(Math.min(1, this.t / 1.4));
-      if (this.freshStack) this.s1.scale.set(1, Math.max(0.001, k), 1);
-      const k2 = ease(Math.min(1, Math.max(0, (this.t - (this.freshStack ? 0.6 : 0)) / 1.2)));
-      this.s2.scale.set(1, Math.max(0.001, k2), 1);
-      if (this.t > (this.freshStack ? 1.9 : 1.3)) { this.s1.scale.set(1, 1, 1); this.s2.scale.set(1, 1, 1); this.state = 'idle'; }
+      const t = this.t;
+      const G1 = 1300 * MM, G2 = SPLIT * MM + 1.2; // 1단·2단을 붙잡는 높이
+      let t2 = t;
+      if (this.freshStack) {
+        // ① 1단: 팔이 잡은 채 14 m 위에서 천천히 내려와 발사대에 앉고(2.2초), 팔이 열려요.
+        const d = ease(Math.min(1, t / 2.2));
+        this.s1.position.y = 14 * (1 - d);
+        if (t < 2.2) { this.setArms(0); this.setArmHeight(this.s1.position.y + G1); }
+        else { this.setArms(ease(Math.min(1, (t - 2.2) / 0.5))); if (!this.clank1) { this.clank1 = true; this.w.sound.pop(); } }
+        t2 = t - 2.8;
+      } else this.s1.position.y = 0;
+      if (t2 >= 0) {
+        // ② 2단(실제 발사장 방식):
+        //   운반차가 2단을 싣고 탑 옆으로 들어옴(0~2.4초, 그동안 팔이 옆으로 돌아가 내려옴)
+        //   → 팔이 닫혀 붙잡음(2.4~2.9) → 들어 올림(2.9~5.0) → 팔이 돌아와 1단 위로(5.0~7.0)
+        //   → 천천히 내려놓고 결합(7.0~8.8) → 팔이 열리고 운반차는 떠나요(8.8~11.2).
+        // 옆자리는 1단과 몸통이 겹치지 않을 만큼(지름의 1.4배 + 2 m) 떨어지게 팔 각도를 정해요.
+        if (this.sw === undefined) {
+          const pv = new THREE.Vector3();
+          this.arms[0].pivot.updateWorldMatrix?.(true, false);
+          this.arms[0].pivot.getWorldPosition(pv);
+          const d = Math.max(1, Math.hypot(this.base.x - pv.x, this.base.z - pv.z));
+          const chord = HFV.radius * 2 * 1.4 + 2;
+          this.sw = Math.min(1.7, 2 * Math.asin(Math.min(1, chord / (2 * d))));
+        }
+        const SW = this.sw, HT = 2.25 * TRK_SCALE - 1.3, S2 = SPLIT * MM; // 운반차 받침대 높이(땅 기준 → 발사대 기준)
+        const k = (a, b) => ease(Math.min(1, Math.max(0, (t2 - a) / (b - a))));
+        const side = this.gripAt(SW);
+        const out = side.clone().sub(this.base).setY(0).normalize();
+        this.s2.visible = true;
+        this.trk.visible = t2 < 11.2;
+        // 운반차 위치
+        const drive = t2 < 8.8 ? 1 - k(0, 2.4) : k(8.8, 11.2);
+        this.trk.position.copy(side).addScaledVector(out, 40 * drive);
+        this.trk.position.y = this.sitePos.y;
+        this.trk.rotation.y = Math.atan2(out.x, out.z);
+        // 2단 아래쪽 높이(발사대 기준)와 팔 각도
+        let bottom, swing, open;
+        if (t2 < 2.4) { bottom = HT; swing = SW * k(0, 2.0); open = 1; }
+        else if (t2 < 2.9) { bottom = HT; swing = SW; open = 1 - k(2.4, 2.9); }
+        else if (t2 < 5.0) { bottom = HT + (S2 + 5 - HT) * k(2.9, 5.0); swing = SW; open = 0; }
+        else if (t2 < 7.0) { bottom = S2 + 5; swing = SW * (1 - k(5.0, 7.0)); open = 0; }
+        else if (t2 < 8.8) { bottom = S2 + 5 * (1 - k(7.0, 8.8)); swing = 0; open = 0; }
+        else { bottom = S2; swing = 0; open = k(8.8, 9.4); }
+        // 2단 수평 위치: 운반차에 실려 있을 땐 운반차와 함께, 팔에 매달린 뒤엔 팔 끝을 따라
+        const at = t2 < 2.9 ? this.trk.position : this.gripAt(swing);
+        this.s2.position.set(at.x - this.base.x, bottom - S2, at.z - this.base.z);
+        this.setArms(open, swing);
+        this.setArmHeight(Math.max(HT, bottom) + (G2 - S2));
+        if (t2 >= 2.9 && !this.clankGrab) { this.clankGrab = true; this.w.sound.pop(); }
+        if (t2 >= 8.8 && !this.clank2) { this.clank2 = true; this.w.sound.pop(); this.w.fx.launchSmoke?.(this.base.clone().add(new THREE.Vector3(0, S2, 0))); }
+      }
+      if (t > this.stackEnd) {
+        this.s1.position.set(0, 0, 0); this.s2.position.set(0, 0, 0);
+        this.setArms(1, 0); this.setArmHeight(CATCH_LIFT + G1);
+        this.clank1 = this.clank2 = this.clankGrab = false;
+        if (this.trk) { this.w.scene.remove(this.trk); this.trk = null; }
+        this.state = 'idle';
+      }
       return;
     }
     if (this.state === 'idle') return;
@@ -538,6 +649,7 @@ export class RocketSystem {
         b.clanked = true;
         this.w.sound.pop();
         this.w.ui.toast('1단 회수 성공', '발사탑 팔이 붙잡았어요', 'green');
+        this.w.onCatch?.();
       }
       if (v >= 1) b.phase = 'lower';
     } else if (b.phase === 'lower') {
@@ -556,6 +668,6 @@ export class RocketSystem {
     this.bst = null;
     this.setArms(1);
     this.w.ui.sx.hide();
-    this.stack(true);
+    this.stack(true, null, true);
   }
 }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { paintParking } from './parking.js';
 import { mulberry32, orientedBox } from './geom.js';
 
 const AREA = {
@@ -107,6 +108,7 @@ export class GroundPainter {
       g.strokeStyle = 'rgba(255,255,255,0.5)';
       g.lineWidth = 0.15;
       g.stroke();
+      paintParking(g, a.poly); // 주차칸 선
     }
     if (a.kind === 'track') {
       g.strokeStyle = 'rgba(255,255,255,0.7)';

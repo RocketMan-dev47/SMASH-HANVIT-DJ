@@ -72,6 +72,68 @@ export class Terrain {
     }
   }
 
+  // 깎기: 범위 안 점마다 target(x, z)보다 높으면 그 높이까지 낮춰요(스탠드 자리 등).
+  carve(x0, x1, z0, z1, target) {
+    const i0 = Math.max(0, Math.floor((x0 - this.x0) / this.dx)), i1 = Math.min(this.nx - 1, Math.ceil((x1 - this.x0) / this.dx));
+    const j0 = Math.max(0, Math.floor((z0 - this.z0) / this.dz)), j1 = Math.min(this.nz - 1, Math.ceil((z1 - this.z0) / this.dz));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const x = this.x0 + i * this.dx, z = this.z0 + j * this.dz;
+        const t = target(x, z);
+        if (t === null || t === undefined) continue;
+        const k = j * this.nx + i;
+        if (this.h[k] > t) this.h[k] = t;
+      }
+    }
+  }
+
+  // 길 다듬기: 길을 따라 높이를 부드럽게 이어서, 차가 덜컹거리지 않게 해요.
+  smoothRoads(roads, margin = 3) {
+    for (const r of roads) {
+      const pts = r.pts;
+      if (pts.length < 2) continue;
+      // 2 m마다 높이를 재고 이동평균으로 부드럽게
+      const samples = [];
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+        const L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(L / 2));
+        for (let k = 0; k < n; k++) { const x = ax + ((bx - ax) * k) / n, z = az + ((bz - az) * k) / n; samples.push([x, z, this.heightAt(x, z)]); }
+      }
+      samples.push([pts[pts.length - 1][0], pts[pts.length - 1][1], this.heightAt(...pts[pts.length - 1])]);
+      for (let pass = 0; pass < 3; pass++) {
+        const hs = samples.map((s) => s[2]);
+        for (let i = 0; i < samples.length; i++) {
+          let sum = 0, c = 0;
+          for (let d = -4; d <= 4; d++) { const k = i + d; if (k >= 0 && k < hs.length) { sum += hs[k]; c++; } }
+          samples[i][2] = sum / c;
+        }
+      }
+      const half = r.w / 2 + 0.6;
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      for (const [x, z] of samples) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
+      const R = half + margin;
+      const i0 = Math.max(0, Math.floor((minX - R - this.x0) / this.dx)), i1 = Math.min(this.nx - 1, Math.ceil((maxX + R - this.x0) / this.dx));
+      const j0 = Math.max(0, Math.floor((minZ - R - this.z0) / this.dz)), j1 = Math.min(this.nz - 1, Math.ceil((maxZ + R - this.z0) / this.dz));
+      for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+          const x = this.x0 + i * this.dx, z = this.z0 + j * this.dz;
+          let best = Infinity, bh = 0;
+          for (let s = 0; s < samples.length - 1; s++) {
+            const [ax, az, ah] = samples[s], [bx, bz, bh2] = samples[s + 1];
+            const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1;
+            const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
+            const d = Math.hypot(x - ax - t * dx, z - az - t * dz);
+            if (d < best) { best = d; bh = ah + (bh2 - ah) * t; }
+          }
+          if (best > R) continue;
+          const k = j * this.nx + i;
+          const w = best <= half ? 1 : 1 - (best - half) / margin;
+          this.h[k] = this.h[k] + (bh - this.h[k]) * w * w * (3 - 2 * w);
+        }
+      }
+    }
+  }
+
   build(groundTexture) {
     this.h0 = this.h.slice();
     const { nx, nz } = this;

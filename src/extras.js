@@ -27,7 +27,7 @@ function chocoPie() {
 }
 
 // 하늘로 튀었다가 떨어져 쌓이는 물건들(매점 간식, 시험지)
-class Flyers {
+export class Flyers {
   constructor(scene, terrain, geo, mat, max, { gravity = 18, drag = 0.4, flutter = 0 } = {}) {
     this.terrain = terrain;
     this.mesh = new THREE.InstancedMesh(geo, mat, max);
@@ -112,6 +112,31 @@ function omrTexture() {
   return t;
 }
 
+// 축구공(흰 바탕에 검은 오각형 무늬)
+function soccerBall() {
+  const g = new THREE.IcosahedronGeometry(0.5, 1).toNonIndexed();
+  const n = g.attributes.position.count, c = new Float32Array(n * 3);
+  for (let f = 0; f < n / 3; f++) {
+    const black = f % 5 === 0;
+    for (let k = 0; k < 3; k++) { const v = black ? 0.08 : 0.96; c[(f * 3 + k) * 3] = c[(f * 3 + k) * 3 + 1] = c[(f * 3 + k) * 3 + 2] = v; }
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  return g;
+}
+// 음표(♪ ♫) 그림
+function noteTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff';
+  g.font = '700 104px "Apple Color Emoji", "Noto Sans Symbols", serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('♫', 64, 70);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 export class Extras {
   constructor(world) {
     const vc = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5 });
@@ -119,6 +144,11 @@ export class Extras {
     this.pie = new Flyers(world.scene, world.terrain, chocoPie(), vc, 60);
     this.papers = new Flyers(world.scene, world.terrain, new THREE.PlaneGeometry(0.8, 1.1),
       new THREE.MeshStandardMaterial({ map: omrTexture(), side: THREE.DoubleSide, roughness: 0.9 }), 260, { gravity: 6, drag: 1.4, flutter: 3 });
+    this.balls = new Flyers(world.scene, world.terrain, soccerBall(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45 }), 40, { gravity: 16, drag: 0.3 });
+    this.notes = new Flyers(world.scene, world.terrain, new THREE.PlaneGeometry(1.4, 1.4),
+      new THREE.MeshBasicMaterial({ map: noteTexture(), transparent: true, side: THREE.DoubleSide, depthWrite: false }), 160, { gravity: 4, drag: 1.2, flutter: 2.5 });
+    const cols = ['#ffc94a', '#ff6fae', '#8fd3ff', '#a0e75a', '#bf8cff', '#ffffff'];
+    for (let i = 0; i < 160; i++) this.notes.mesh.setColorAt(i, new THREE.Color(cols[i % cols.length]));
   }
 
   jackpot(P) {
@@ -130,8 +160,13 @@ export class Extras {
     this.papers.spawn(P.clone().add(new THREE.Vector3(0, 4, 0)), Math.min(26, 4 + Math.round(volume / 60)), 9, 1.6);
   }
 
-  update(dt) { this.milk.update(dt); this.pie.update(dt); this.papers.update(dt); }
-  clear() { this.milk.clear(); this.pie.clear(); this.papers.clear(); }
+  // 인재원 Ⅱ(축구부 기숙사): 축구공이 통통
+  soccer(P) { this.balls.spawn(P.clone().add(new THREE.Vector3(0, 4, 0)), 18, 15, 2.2); }
+  // 하모니홀: 음표가 하늘로 솟았다가 쏟아져요
+  music(P) { this.notes.spawn(P.clone().add(new THREE.Vector3(0, 6, 0)), 60, 18, 2.4); }
+
+  update(dt) { this.milk.update(dt); this.pie.update(dt); this.papers.update(dt); this.balls.update(dt); this.notes.update(dt); }
+  clear() { this.milk.clear(); this.pie.clear(); this.papers.clear(); this.balls.clear(); this.notes.clear(); }
 }
 
 // 본관 1층 매점 간판

@@ -5,6 +5,27 @@ import { centroid } from './geom.js';
 
 const merge = (geos) => mergeGeometries(geos.map((g) => (g.index ? g.toNonIndexed() : g)));
 
+// 스탠드 자리 깎기: 계단 높이를 따라 땅을 낮추고, 양 끝은 1:1 비탈로 자연스럽게 이어요(도랑이 안 생겨요).
+export function carveStands(terrain, e, fieldY, N) {
+  const { rise, depth } = STEP;
+  const len = e.L * 0.78;
+  const uMin = -len / 2 - 0.6, uMax = len / 2 + 4.4; // +x 끝에는 옆 계단
+  const vEnd = 1.6 + N * depth;
+  const R = Math.hypot(e.L, vEnd) / 2 + 20;
+  // buildStands의 그룹 회전과 같은 축(그룹의 +x)
+  const th = Math.atan2(e.nx, e.nz), lx = Math.cos(th), lz = -Math.sin(th);
+  terrain.carve(e.mx - R, e.mx + R, e.mz - R, e.mz + R, (x, z) => {
+    const dx = x - e.mx, dz = z - e.mz;
+    const u = dx * lx + dz * lz, v = dx * e.nx + dz * e.nz;
+    if (v < -1 || v > vEnd + 8) return null;
+    const out = Math.max(uMin - u, u - uMax, 0);
+    if (out > 12) return null;
+    const step = Math.max(0, Math.min(N, Math.floor((v - 1.6) / depth) + 1));
+    const base = v < 1.6 ? fieldY : v > vEnd ? fieldY + N * rise + (v - vEnd) * 0.8 : fieldY + step * rise - 0.15;
+    return base + out * 1.0;
+  });
+}
+
 // 운동장 변 중 본관을 바라보는 가장 긴 변
 export function pickStandEdge(pitch, mainPoly) {
   const pc = centroid(pitch);
@@ -121,38 +142,53 @@ export class Stream {
     const group = new THREE.Group();
     const pts = path;
     const n = pts.length - 1;
-    const baseY = Math.min(...pts.map(([x, z]) => terrain.heightAt(x, z)));
+    // 칸마다 실제 땅 높이를 따라가되, 아래 칸으로 갈수록 최소 drop만큼 낮아지게
+    const lv = [];
+    for (let i = 0; i < n; i++) {
+      const cx = (pts[i][0] + pts[i + 1][0]) / 2, cz = (pts[i][1] + pts[i + 1][1]) / 2;
+      lv.push(terrain.heightAt(cx, cz) + 0.3);
+    }
+    for (let i = n - 2; i >= 0; i--) lv[i] = Math.max(lv[i], lv[i + 1] + drop);
     for (let i = 0; i < n; i++) {
       const a = pts[i], b = pts[i + 1];
       const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
       const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
-      const lvl = baseY + 0.25 + (n - 1 - i) * drop + (i === n - 1 ? 0 : 0);
+      const lvl = lv[i];
       const cx = (a[0] + b[0]) / 2, cz = (a[1] + b[1]) / 2;
-      const w = i === n - 1 ? pond[1] : width, len = i === n - 1 ? Math.max(L, pond[0]) : L;
-      // 돌 테두리(아래까지 채워서 떠 보이지 않게)
-      const h = lvl - (baseY - 1) + 0.25;
-      const rim = new THREE.Mesh(new THREE.BoxGeometry(len + 0.6, h, w + 0.8), stone);
-      rim.position.set(cx, baseY - 1 + h / 2 - 0.12, cz);
+      const last = i === n - 1;
+      const w = last ? pond[1] : width, len = last ? Math.max(L, pond[0]) : L;
+      const ground = Math.min(terrain.heightAt(a[0], a[1]), terrain.heightAt(b[0], b[1]), terrain.heightAt(cx, cz)) - 1.2;
+      const h = lvl + 0.25 - ground;
+      const rim = new THREE.Mesh(new THREE.BoxGeometry(len + 0.7, h, w + 0.9), stone);
+      rim.position.set(cx, ground + h / 2, cz);
       rim.rotation.y = -ang;
       rim.castShadow = rim.receiveShadow = true;
       group.add(rim);
       const surf = new THREE.Mesh(new THREE.PlaneGeometry(len, w).rotateX(-Math.PI / 2), water);
-      surf.position.set(cx, lvl + 0.02, cz);
+      surf.position.set(cx, lvl + 0.3, cz);
       surf.rotation.y = -ang;
       group.add(surf);
-      if (i < n - 1) {
-        // 다음 칸으로 떨어지는 작은 폭포
-        const fall = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.8, drop + 0.1), water);
-        fall.position.set(b[0], lvl - drop / 2 + 0.02, b[1]);
+      if (!last) {
+        const d = lvl - lv[i + 1];
+        const fall = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.8, d + 0.1), water);
+        fall.position.set(b[0], lv[i + 1] + 0.3 + d / 2, b[1]);
         fall.rotation.y = -ang + Math.PI / 2;
         group.add(fall);
-        this.falls.push(new THREE.Vector3(b[0], lvl - drop + 0.1, b[1]));
+        this.falls.push(new THREE.Vector3(b[0], lv[i + 1] + 0.35, b[1]));
+      }
+      // 연못 둘레 돌과 수초
+      if (last) {
+        for (let k = 0; k < 10; k++) {
+          const a2 = (k / 10) * Math.PI * 2;
+          const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.35 + Math.random() * 0.25), stone);
+          r.position.set(cx + Math.cos(a2) * (len / 2 + 0.6), lvl + 0.35, cz + Math.sin(a2) * (w / 2 + 0.6));
+          group.add(r);
+        }
       }
     }
-    // 물이 나오는 돌 수구
     const [sx, sz] = pts[0];
     const spout = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 1.2), stone);
-    spout.position.set(sx, baseY + 0.25 + (n - 1) * drop + 0.5, sz);
+    spout.position.set(sx, lv[0] + 0.9, sz);
     group.add(spout);
     scene.add(group);
     this.group = group;
@@ -302,4 +338,115 @@ export function buildFossil(scene, terrain, text = 'Made By. @eh._.p_09') {
   mesh.position.set(x, terrain.bottom + 6, z);
   scene.add(mesh);
   return mesh;
+}
+
+// 분리수거장·소각장(하모니홀 뒤): 콘크리트 바닥, 수거함, 굴뚝 있는 소각로
+export class Recycling {
+  constructor(scene, terrain, fx, { center, angle = 0 }) {
+    this.fx = fx;
+    const g = new THREE.Group();
+    const [cx, cz] = center;
+    const y = terrain.heightAt(cx, cz);
+    g.position.set(cx, y, cz);
+    g.rotation.y = (-angle * Math.PI) / 180;
+    const concrete = new THREE.MeshStandardMaterial({ color: 0xa7a49d, roughness: 0.95 });
+    const add = (geo, m, x, yy, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, yy, z); o.castShadow = o.receiveShadow = true; g.add(o); return o; };
+    add(new THREE.BoxGeometry(14, 1.2, 9), concrete, 0, -0.45, 0);
+    const bins = [0x2f9e44, 0x2f6fe0, 0xf2c14e, 0x8a8f96];
+    bins.forEach((c, i) => {
+      add(new THREE.BoxGeometry(1.8, 1.5, 1.3), new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 }), -5 + i * 2.2, 0.9, -2.6);
+      add(new THREE.BoxGeometry(1.9, 0.12, 1.4), new THREE.MeshStandardMaterial({ color: 0x333333 }), -5 + i * 2.2, 1.7, -2.6);
+    });
+    // 소각로 + 굴뚝
+    add(new THREE.BoxGeometry(4.5, 3.2, 4), new THREE.MeshStandardMaterial({ color: 0x7c7f84, roughness: 0.8 }), 4, 1.75, 1.5);
+    add(new THREE.CylinderGeometry(0.45, 0.55, 8, 12), new THREE.MeshStandardMaterial({ color: 0x5d6168, roughness: 0.7 }), 5.2, 6.5, 2.4);
+    add(new THREE.BoxGeometry(2.6, 0.2, 3.4), new THREE.MeshStandardMaterial({ color: 0x55585e }), -3.5, 2.6, 2.2);
+    for (const [x, z] of [[-4.7, 0.7], [-2.3, 0.7], [-4.7, 3.7], [-2.3, 3.7]]) add(new THREE.CylinderGeometry(0.06, 0.06, 2.6, 6), concrete, x, 1.3, z);
+    this.chimney = new THREE.Vector3(5.2, 10.6, 2.4).applyEuler(g.rotation).add(g.position);
+    scene.add(g);
+    this.group = g;
+  }
+
+  update(dt) {
+    if (Math.random() < dt * 3) {
+      const p = this.chimney;
+      this.fx.smoke.spawn(p.x, p.y, p.z, 0.6 + Math.random(), 2 + Math.random(), (Math.random() - 0.5), new THREE.Color('#9a9a9a'), 2.2, 5, { grow: 1.6, drag: 0.4, alpha: 0.45 });
+    }
+  }
+}
+
+// 운동장 네 모서리 조명탑(밤에 켜져요)
+export class Floodlights {
+  constructor(scene, terrain, box) {
+    this.lights = [];
+    this.heads = [];
+    const steel = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.4, metalness: 0.8 });
+    this.headMat = new THREE.MeshStandardMaterial({ color: 0x333333, emissive: 0xfff6dd, emissiveIntensity: 0 });
+    this.beamMat = new THREE.MeshBasicMaterial({ color: 0xfff3d1, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const c = Math.cos(box.angle), s = Math.sin(box.angle);
+    for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const u = su * (box.L / 2 + 3), v = sv * (box.W / 2 + 3);
+      const x = box.cx + u * c - v * s, z = box.cz + u * s + v * c;
+      const y = terrain.heightAt(x, z);
+      const H = 20;
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.35, H, 10), steel);
+      pole.position.set(x, y + H / 2, z);
+      pole.castShadow = true;
+      scene.add(pole);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(3, 1.6, 0.5), this.headMat);
+      head.position.set(x, y + H + 0.6, z);
+      head.lookAt(box.cx, y, box.cz);
+      scene.add(head);
+      this.heads.push(head);
+      const target = new THREE.Object3D();
+      target.position.set(box.cx + (x - box.cx) * 0.2, y, box.cz + (z - box.cz) * 0.2);
+      scene.add(target);
+      const L = new THREE.SpotLight(0xfff3d6, 0, 140, 0.75, 0.6, 1.2);
+      L.position.copy(head.position);
+      L.target = target;
+      scene.add(L);
+      this.lights.push(L);
+      // 빛줄기(살짝)
+      const dist = head.position.distanceTo(target.position);
+      const beam = new THREE.Mesh(new THREE.ConeGeometry(dist * 0.32, dist, 20, 1, true), this.beamMat);
+      beam.position.copy(head.position).lerp(target.position, 0.5);
+      beam.lookAt(target.position);
+      beam.rotateX(Math.PI / 2);
+      scene.add(beam);
+    }
+  }
+
+  set(on) {
+    for (const L of this.lights) L.intensity = on ? 2600 : 0;
+    this.headMat.emissiveIntensity = on ? 3 : 0;
+    this.beamMat.opacity = on ? 0.06 : 0;
+  }
+}
+
+// 버스 정류장 "한빛고교"
+export function buildBusStop(scene, terrain, at, yaw) {
+  const g = new THREE.Group();
+  const [x, z] = at;
+  g.position.set(x, terrain.heightAt(x, z), z);
+  g.rotation.y = yaw;
+  const steel = new THREE.MeshStandardMaterial({ color: 0x3b4a66, roughness: 0.4, metalness: 0.6 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x9fc3e6, transparent: true, opacity: 0.35, roughness: 0.05 });
+  const add = (geo, m, px, py, pz) => { const o = new THREE.Mesh(geo, m); o.position.set(px, py, pz); o.castShadow = true; g.add(o); return o; };
+  add(new THREE.BoxGeometry(5, 0.15, 2.2), steel, 0, 2.8, 0);
+  for (const px of [-2.3, 2.3]) add(new THREE.BoxGeometry(0.12, 2.8, 0.12), steel, px, 1.4, -0.9);
+  add(new THREE.BoxGeometry(4.6, 2.2, 0.06), glass, 0, 1.5, -1.0);
+  add(new THREE.BoxGeometry(3.4, 0.12, 0.5), new THREE.MeshStandardMaterial({ color: 0x8a5a3b }), 0, 0.6, -0.6);
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 96;
+  const k = c.getContext('2d');
+  k.fillStyle = '#1f4fa8'; k.fillRect(0, 0, 256, 96);
+  k.fillStyle = '#fff'; k.font = '800 40px "Pretendard Variable", Pretendard, sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle';
+  k.fillText('한빛고교', 128, 50);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  add(new THREE.CylinderGeometry(0.07, 0.07, 3.6, 8), steel, 3.2, 1.8, 0.4);
+  const sign = add(new THREE.BoxGeometry(1.4, 0.55, 0.06), [0, 0, 0, 0, 1, 1].map((q) => (q ? new THREE.MeshBasicMaterial({ map: t }) : steel)), 3.2, 3.4, 0.4);
+  sign.rotation.y = Math.PI / 2;
+  scene.add(g);
+  return g;
 }
