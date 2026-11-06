@@ -29,7 +29,8 @@ export const GROUPS = [
 ];
 
 export class Launcher {
-  constructor({ hap, blockUnlocked, onBlock, blockOn, onGame }) {
+  constructor({ hap, blockUnlocked, onBlock, blockOn, onGame, online, onOnline }) {
+    this.online = online; this.onOnline = onOnline;
     this.onGame = onGame;
     this.hap = hap;
     this.blockUnlocked = blockUnlocked;
@@ -48,7 +49,8 @@ export class Launcher {
 
   render() {
     const wrap = this.el.querySelector('.lx-wrap');
-    wrap.innerHTML = `<header class="lx-head"><b>HASA 앱 보관함</b><span>아래로 쓸어내리면 닫혀요</span></header><div class="lx-grid">${GROUPS.map((g, gi) => {
+    const on = this.online?.() || false;
+    wrap.innerHTML = `<header class="lx-head"><b>HASA 앱 보관함</b><button type="button" class="lx-online ${on ? 'on' : ''}" aria-pressed="${on}"><i></i>온라인 ${on ? '켜짐' : '꺼짐'}</button></header><div class="lx-grid">${GROUPS.map((g, gi) => {
       const items = g.items.filter(([id]) => id !== 'block' || this.blockUnlocked());
       return `<section class="lx-card" style="--gi:${gi}"><h3>${g.name}</h3><div class="lx-tiles">${items.map(([id, name], ti) => {
         const src = document.getElementById(id);
@@ -60,6 +62,7 @@ export class Launcher {
         return `<button type="button" class="lx-tile" data-t="${id}" style="--ti:${ti};--a:${g.grad[0]};--b:${g.grad[1]}" aria-label="${name}${toggle ? (pressed ? ' 켜짐' : ' 꺼짐') : ''}"><i>${svg}${toggle ? `<em class="${pressed ? 'on' : ''}"></em>` : ''}</i><span>${name}</span></button>`;
       }).join('')}</div></section>`;
     }).join('')}</div>`;
+    wrap.querySelector('.lx-online').addEventListener('click', (e) => { e.stopPropagation(); this.onOnline?.(); this.render(); });
     for (const t of wrap.querySelectorAll('.lx-tile')) {
       t.addEventListener('click', (e) => {
         e.stopPropagation();

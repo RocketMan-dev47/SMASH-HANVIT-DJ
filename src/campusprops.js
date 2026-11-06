@@ -417,9 +417,9 @@ export class Floodlights {
   }
 
   set(on) {
-    for (const L of this.lights) L.intensity = on ? 900 : 0; // 예전 2600은 운동장이 하얗게 날아갔어요
-    this.headMat.emissiveIntensity = on ? 1.6 : 0;
-    this.beamMat.opacity = on ? 0.03 : 0;
+    for (const L of this.lights) L.intensity = on ? 380 : 0; // 은은하게(예전 2600 → 900 → 380)
+    this.headMat.emissiveIntensity = on ? 1.2 : 0;
+    this.beamMat.opacity = on ? 0.015 : 0;
   }
 }
 

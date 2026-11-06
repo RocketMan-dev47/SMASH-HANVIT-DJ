@@ -156,7 +156,7 @@ export function race(opts = {}) {
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(K(k))) ?? d; } catch { return d; } };
   const save = (k, v) => { try { localStorage.setItem(K(k), JSON.stringify(v)); } catch { /* 저장 공간 부족 등 */ } };
   const { pts, N, seg, head, prof } = T;
-  let S;
+  let S, rival = null;
   const fmtT = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(3).padStart(6, '0')}`;
   const records = () => load('sectors', {});
   const nearest = (x, y, hint) => {
@@ -169,7 +169,7 @@ export function race(opts = {}) {
     const grid = (k) => { const i = 4 + (5 - k) * 4, h = head[i], side = k % 2 ? 1 : -1; let prog = 0; for (let j = 0; j < i; j++) prog += seg[j]; return { x: pts[i][0] + Math.cos(h) * side * 3.5, y: pts[i][1] + Math.sin(h) * side * 3.5, h, i, prog, vx: 0, vy: 0, sp: 0, slip: 0 }; };
     const me = { ...grid(5), name: '나', color: '#ffc94a', me: true, lap: 0, steer: 0, skin: skinStore.sel(), best: 0, lapStart: 0, done: 0 };
     const ai = RIVALS.map(([n, c], k) => ({ ...grid(k), name: n, color: c, lap: 0, pace: 0.925 + Math.random() * 0.02 - k * 0.004, done: 0 }));
-    S = { cars: [me, ...ai], me, t: -4.2, lights: 0, input: { l: false, r: false, b: false }, finishOrder: [], sector: null, banner: '', bannerT: 0, rec: records(), ghost: load('ghost', null), lapRec: [], recT: 0 };
+    S = { cars: [me, ...ai], me, t: -4.2, lights: 0, input: { l: false, r: false, b: false }, finishOrder: [], sector: null, banner: '', bannerT: 0, rec: records(), ghost: rival || load('ghost', null), rivalGhost: rival, lapRec: [], recT: 0 };
   };
   const progress = (c) => c.lap * T.total + c.prog;
   // 차 한 대 물리(공통)
@@ -199,6 +199,8 @@ export function race(opts = {}) {
       if (c.me) {
         const lt = S.t - c.lapStart; c.best = c.best ? Math.min(c.best, lt) : lt; c.lapStart = S.t;
         const gb = S.ghost?.t;
+        S.lapDone = { t: lt, s: S.lapRec.slice() };
+        if (S.rivalGhost && lt < S.rivalGhost.t) S.rivalBeat = true;
         if (!gb || lt < gb) { save('ghost', { t: lt, s: S.lapRec }); S.banner = `${c.lap}랩 ${fmtT(lt)} · 고스트 갱신!`; if (gb) S.ghostBeat = true; } else S.banner = `${c.lap}랩 ${fmtT(lt)} · 고스트보다 +${(lt - gb).toFixed(2)}`;
         S.bannerT = 2.6; S.lapRec = []; S.recT = 0;
       }
@@ -214,14 +216,17 @@ export function race(opts = {}) {
     how: ['빨간불 다섯 개가 꺼지면 출발. 가속은 자동, ↓(가운데 버튼)가 브레이크예요.', '타이어 접지 한계가 있어요. 빠르게 꺾으면 바깥으로 밀리고, 잔디·자갈에선 크게 느려져요.', `코너마다 “레코드 페이스”(이 서킷 물리로 계산한 이론상 최고)에 도전해요. 한 바퀴 레코드 페이스 ${fmtT(T.lapPace)}.`],
     fmt: (v) => fmtT(v / 1000), lowerIsBetter: true,
     peek: () => ({ S, T }),
+    circuit: CIR.id, week: weeklyCircuit().key,
+    setRival(g) { rival = g && g.s ? g : null; },
     extra() {
       const own = skinStore.owned(), sel = skinStore.sel(), rec = records();
       const beat = T.sectors.filter((s) => rec[s.name] && rec[s.name] <= s.pace).length;
       const gh = load('ghost', null), wk = load('week', {})[weeklyCircuit().key];
-      return `<p class="arc-x-t">${CIR.name} · 이번 주 최고 ${wk ? fmtT(wk) : '-'} · 고스트(최고 랩) ${gh ? fmtT(gh.t) : '없음'}</p><p class="arc-x-t">차 고르기</p><div class="arc-skins">${SKINS.map((s) => `<button type="button" data-s="${s.id}" class="${s.id === sel ? 'on' : ''}" ${own.includes(s.id) ? '' : 'disabled'} aria-label="${s.name}"><canvas width="88" height="88"></canvas><span>${own.includes(s.id) ? s.name : '잠김'}</span></button>`).join('')}</div>
+      return `<p class="arc-x-t">${CIR.name} · 이번 주 최고 ${wk ? fmtT(wk) : '-'} · 고스트(최고 랩) ${gh ? fmtT(gh.t) : '없음'}</p><div id="gp-rank"></div><p class="arc-x-t">차 고르기</p><div class="arc-skins">${SKINS.map((s) => `<button type="button" data-s="${s.id}" class="${s.id === sel ? 'on' : ''}" ${own.includes(s.id) ? '' : 'disabled'} aria-label="${s.name}"><canvas width="88" height="88"></canvas><span>${own.includes(s.id) ? s.name : '잠김'}</span></button>`).join('')}</div>
         <p class="arc-x-t">코너 도전 · 레코드 페이스 돌파 ${beat}/${T.sectors.length}</p><div class="arc-secs">${T.sectors.map((s) => `<div><b>${s.name}</b><span>목표 ${s.pace.toFixed(2)}초 · 내 최고 ${rec[s.name] ? `${rec[s.name].toFixed(2)}초${rec[s.name] <= s.pace ? ' ✓' : ''}` : '-'}</span>${TRIVIA[s.name] ? `<em>${TRIVIA[s.name]}</em>` : ''}</div>`).join('')}</div>`;
     },
     bindExtra(box) {
+      this.onRank?.(box.querySelector('#gp-rank'));
       for (const b of box.querySelectorAll('button[data-s]')) {
         const c = b.querySelector('canvas'), g = c.getContext('2d');
         g.translate(44, 44); g.rotate(-0.5); if (b.disabled) g.globalAlpha = 0.25; drawSkin(g, b.dataset.s, 52);
@@ -267,6 +272,8 @@ export function race(opts = {}) {
         S.sector = null;
       }
       if (S.ghostBeat) { S.ghostBeat = false; this.onGhost?.(); }
+      if (S.rivalBeat) { S.rivalBeat = false; this.onRival?.(); }
+      if (S.lapDone) { const L = S.lapDone; S.lapDone = null; this.onLap?.(L.t, L.s); }
       S.bannerT -= dt;
       for (const c of S.cars) if (!c.done && c.lap >= LAPS) {
         c.done = S.t; S.finishOrder.push(c);
@@ -317,7 +324,7 @@ export function race(opts = {}) {
         D.text(g, c.name, tx + 36, y, { size: 12, weight: c.me ? 800 : 600, color: c.me ? SYS.text : SYS.text2 });
         D.text(g, k ? `+${((lead - progress(c)) / 60).toFixed(1)}` : '선두', tx + 126, y, { size: 11, color: SYS.text3, align: 'right', mono: true });
       });
-      if (S.ghost?.t) D.text(g, `고스트 ${fmtT(S.ghost.t)}`, 24, H - 196, { size: 11, weight: 600, color: SYS.text3 });
+      if (S.ghost?.t) D.text(g, `${S.rivalGhost?.name ? `${S.rivalGhost.name} ` : ''}고스트 ${fmtT(S.ghost.t)}`, 24, H - 196, { size: 11, weight: 600, color: SYS.text3 });
       D.text(g, `${Math.round(me.sp * 3.6)}`, 24, H - 150, { size: 40, weight: 300, mono: true });
       D.text(g, 'km/h', 24, H - 132, { size: 11, color: SYS.text3 });
       if (me.grass) D.text(g, '코스 밖', 24, H - 112, { size: 11, weight: 700, color: SYS.red });

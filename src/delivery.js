@@ -74,14 +74,17 @@ export class Delivery {
   // 로켓 배송: 멀쩡한 건물마다 로켓 엔진 4개를 달고 차례로 발사
   rocketDelivery() {
     const w = this.w;
-    const list = w.buildings.list.filter((b) => b.intact && !b.launched);
-    if (!list.length) { w.ui.toast('배송할 건물이 없어요', '멀쩡한 건물만 로켓 배송돼요'); return false; }
-    w.ui.toast('로켓 배송 출발!', `건물 ${list.length}동을 우주로 배송해요`, 'gold');
+    const all = w.buildings.list.filter((b) => b.intact && !b.launched && !this.launches.some((L) => L.b === b));
+    if (!all.length) { w.ui.toast('배송할 건물이 없어요', '멀쩡한 건물만 로켓 배송돼요'); return false; }
+    // 한 번 누를 때 한 동만(택배차에서 가장 가까운 건물)
+    const tp = this.truck.position, list = [all.sort((a, b) => Math.hypot(a.c2[0] - tp.x, a.c2[1] - tp.z) - Math.hypot(b.c2[0] - tp.x, b.c2[1] - tp.z))[0]];
+    w.ui.toast('로켓 배송 출발!', `${list[0].name || '건물'}을(를) 우주로 배송해요 · 다시 짓기로 돌아와요`, 'gold');
     w.sound.countdown?.();
     const engineMat = new THREE.MeshStandardMaterial({ color: 0xd9dde2, roughness: 0.3, metalness: 0.8 });
     const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb066, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
     list.forEach((b, i) => {
       const objs = [b.intact, b.decor, b.cap].filter(Boolean);
+      for (const o of objs) o.userData.p0 = o.position.clone(); // 원래 자리 기억
       const pack = new THREE.Group();
       const engines = [];
       const xs = b.poly.map((p) => p[0]), zs = b.poly.map((p) => p[1]);
@@ -140,7 +143,7 @@ export class Delivery {
       if (L.t < 0) {
         // 카운트다운: 들썩들썩 + 하얀 연기
         const shake = L.t > -1.2 ? 0.15 : 0.05;
-        for (const o of L.objs) o.position.x = (Math.random() - 0.5) * shake;
+        for (const o of L.objs) o.position.x = o.userData.p0.x + (Math.random() - 0.5) * shake;
         if (L.t > -1.2 && Math.random() < 0.5) w.fx.smoke.spawn(L.cx + (Math.random() - 0.5) * 20, L.b.base + 0.5, L.cz + (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 8, 1, (Math.random() - 0.5) * 8, new THREE.Color('#e9e6df'), 3, 2.5, { grow: 2, drag: 1.2, alpha: 0.7 });
         continue;
       }
@@ -152,7 +155,7 @@ export class Delivery {
       }
       L.v += (6 + L.t * 6) * dt;
       L.y += L.v * dt;
-      for (const o of L.objs) { o.position.y = L.y; o.position.x = 0; }
+      for (const o of L.objs) o.position.set(o.userData.p0.x, o.userData.p0.y + L.y, o.userData.p0.z);
       L.pack.position.y = L.y;
       for (const e of L.engines) {
         e.f.scale.set(1, 0.8 + Math.random() * 0.5, 1);

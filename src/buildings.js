@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeOutline, planBuilding, pieceGeometry } from './fracture.js';
 import { centroid, signedArea, hashString, mulberry32, orientedBox, pointInPolygon } from './geom.js';
 import { facadeTexture, facadeGlowTexture, concreteTexture, roofTexture, STYLES } from './textures.js';
+import { surfaceMaps } from './visual.js';
 
 const GRAVITY = 15.5; // 실제(9.8)보다 조금 세게: 무너지는 맛이 빨라요
 const FOUNDATION = 2.5;
@@ -439,8 +440,9 @@ export class BuildingSystem {
   materialsFor(style, roof, id = '') {
     const key = style + '|' + roof + '|' + id;
     if (this.matCache.has(key)) return this.matCache.get(key);
+    const ft = facadeTexture(style), sm = surfaceMaps(ft); // 2.0: 유리창에 하늘이 비쳐요
     const facade = new THREE.MeshStandardMaterial({
-      map: facadeTexture(style), roughness: 0.82, metalness: 0.02,
+      map: ft, roughness: 1, metalness: 1, roughnessMap: sm.rough, metalnessMap: sm.metal, envMapIntensity: 1.1,
       emissiveMap: facadeGlowTexture(style), emissive: new THREE.Color(0x000000),
     });
     const roofMat = new THREE.MeshStandardMaterial({ map: roofTexture(roof), roughness: 0.92, metalness: 0 });

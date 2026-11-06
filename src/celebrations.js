@@ -75,11 +75,76 @@ export class Celebrations {
     if (this.kind === 'stickday') this.sticks.spawn(P, n, 14, 1.6);
     if (this.kind === 'hangul') this.jamo.forEach((f) => f.spawn(P, Math.ceil(n / 4), 13, 1.3));
     if (this.kind === 'graduation') this.caps.spawn(P, Math.ceil(n / 2), 16, 1.5);
+    const THEME = { newyear: ['#ffd700', '#ff5d5d', '#ffffff'], seollal: ['#d63a4a', '#f3b33d', '#2f6fe0', '#3fa34d'], chuseok: ['#ffe08a', '#f5cf6a', '#ffffff'], valentine: ['#ff5d8f', '#ff8fb1', '#e8456f'], whiteday: ['#ffffff', '#bfe3ff', '#ffd1e0'], arbor: ['#4caf50', '#7cc36b', '#2f7a3a'], earth: ['#4caf50', '#3a8fd6', '#7cc36b'], students: ['#1f3d8a', '#ffc94a', '#ffffff'], dongji: ['#8b2a2a', '#5a4d9e'], parents: ['#ff8fb1', '#ffffff'], children: ['#ff5d5d', '#ffd60a', '#64d2ff', '#30d158'] }[this.kind];
+    if (THEME) for (const c of THEME) this.w.fx.burst?.(P.clone().add(new THREE.Vector3(0, 3, 0)), new THREE.Color(c), Math.ceil((40 + R * 4) / THEME.length));
+  }
+
+  // ---------- 기념일 모으기: 그날만의 물건 12개를 눌러 모아요 ----------
+  spawnCollect(kind) {
+    const SPEC = {
+      newyear: ['복 동전', '새해 복 동전을 모아요'], seollal: ['복주머니', '숨은 복주머니를 찾아요'], chuseok: ['청사초롱', '꺼진 청사초롱에 불을 켜요'],
+      valentine: ['하트 풍선', '하트 풍선을 터뜨려요'], whiteday: ['사탕', '흩어진 사탕을 모아요'], samil: ['태극기', '빈 깃대에 태극기를 달아요'], gwangbok: ['태극기', '빈 깃대에 태극기를 달아요'],
+      arbor: ['나무 심기', '빛나는 자리에 나무를 심어요'], earth: ['나무 심기', '빛나는 자리에 나무를 심어요'], students: ['종이비행기', '날아다니는 종이비행기를 잡아요'], dongji: ['팥죽', '따뜻한 팥죽 그릇을 모아요'], halloween: ['호박', '숨은 호박을 찾아요'],
+    }[kind];
+    this.collect = null;
+    if (!SPEC || !this.pitch) return;
+    const T = this.w.terrain, P = this.pitch;
+    // 자리: 길가와 운동장 둘레를 섞어서 12곳
+    const road = this.roadside(30, 4).filter((_, i) => i % 2 === 0);
+    const ring = Array.from({ length: 12 }, (_, i) => { const a = (i / 12) * Math.PI * 2 + 0.2; return [P.cx + Math.cos(a) * (P.L / 2 + 10), P.cz + Math.sin(a) * (P.W / 2 + 10)]; });
+    const spots = [];
+    for (let i = 0; spots.length < 12 && i < 40; i++) { const q = (i % 2 ? road[i >> 1] : ring[i >> 1]) || ring[i % 12]; if (q && !spots.some((o) => Math.hypot(o[0] - q[0], o[1] - q[1]) < 12)) spots.push(q); }
+    const M = (c, e = 0, ec) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.5, emissive: ec || c, emissiveIntensity: e });
+    const make = () => {
+      const g = new THREE.Group(), add = (geo, m, y = 0) => { const o = new THREE.Mesh(geo, m); o.position.y = y; o.castShadow = true; g.add(o); return o; };
+      if (kind === 'newyear') { add(new THREE.CylinderGeometry(0.9, 0.9, 0.2, 20).rotateX(Math.PI / 2), M('#ffd23f', 0.5), 2.2); g.userData.float = 2.2; }
+      else if (kind === 'seollal') { const b = add(new THREE.SphereGeometry(0.8, 14, 10), M('#d63a4a', 0.15), 0.85); b.scale.set(1, 1.1, 1); add(new THREE.ConeGeometry(0.38, 0.55, 10), M('#f3b33d'), 1.8); }
+      else if (kind === 'chuseok') { add(new THREE.CylinderGeometry(0.05, 0.06, 2.6, 6), M('#6b4a2e'), 1.3); g.userData.top = add(new THREE.CylinderGeometry(0.28, 0.28, 0.32, 10), M('#5a2a2a', 0, '#ff5a3c'), 2.4); g.userData.bot = add(new THREE.CylinderGeometry(0.28, 0.28, 0.26, 10), M('#20294a', 0, '#3b5bff'), 2.1); }
+      else if (kind === 'valentine') { const sh = new THREE.Shape(); sh.moveTo(0, -1); sh.bezierCurveTo(-1.4, 0, -0.9, 1.1, 0, 0.5); sh.bezierCurveTo(0.9, 1.1, 1.4, 0, 0, -1); add(new THREE.ExtrudeGeometry(sh, { depth: 0.5, bevelEnabled: false }), M('#ff5d8f', 0.25), 4); g.userData.float = 4; }
+      else if (kind === 'whiteday') { add(new THREE.SphereGeometry(0.55, 14, 10), M('#bfe3ff', 0.2), 1.4); const w1 = add(new THREE.ConeGeometry(0.35, 0.6, 8), M('#ffffff'), 1.4); w1.rotation.z = Math.PI / 2; w1.position.x = 0.75; const w2 = add(new THREE.ConeGeometry(0.35, 0.6, 8), M('#ffffff'), 1.4); w2.rotation.z = -Math.PI / 2; w2.position.x = -0.75; g.userData.float = 1.4; }
+      else if (kind === 'samil' || kind === 'gwangbok') { add(new THREE.CylinderGeometry(0.05, 0.06, 4.2, 6), M('#d9d9d9'), 2.1); const f = add(new THREE.PlaneGeometry(1.5, 1), new THREE.MeshStandardMaterial({ map: this.flagTex(), side: THREE.DoubleSide }), 3.6); f.position.x = 0.78; f.visible = false; g.userData.flag = f; }
+      else if (kind === 'arbor' || kind === 'earth') { const r = add(new THREE.TorusGeometry(0.9, 0.08, 6, 24).rotateX(Math.PI / 2), M('#7cff8a', 1.2), 0.05); g.userData.ring = r; const tree = new THREE.Group(); const t = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 1, 6), M('#7a5230')); t.position.y = 0.5; const l = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.4, 8), M('#4caf50')); l.position.y = 1.5; tree.add(t, l); tree.scale.setScalar(0.01); tree.visible = false; g.add(tree); g.userData.tree = tree; }
+      else if (kind === 'students') { const sh = new THREE.Shape([new THREE.Vector2(0, 0.9), new THREE.Vector2(0.7, -0.6), new THREE.Vector2(0, -0.2), new THREE.Vector2(-0.7, -0.6)]); const pl = add(new THREE.ShapeGeometry(sh), new THREE.MeshStandardMaterial({ color: '#ffffff', side: THREE.DoubleSide, emissive: '#ffffff', emissiveIntensity: 0.2 }), 3); pl.rotation.x = -Math.PI / 2.4; g.userData.float = 3; g.userData.fly = true; }
+      else if (kind === 'dongji') { add(new THREE.CylinderGeometry(0.6, 0.4, 0.4, 16), M('#d9c8a5'), 0.2); add(new THREE.CylinderGeometry(0.55, 0.55, 0.05, 16), M('#8b2a2a', 0.2), 0.42); }
+      else if (kind === 'halloween') { const b = add(new THREE.SphereGeometry(0.8, 14, 10), M('#ff7a00', 0.35), 0.7); b.scale.set(1.2, 0.85, 1.2); add(new THREE.CylinderGeometry(0.08, 0.1, 0.35, 6), M('#3f6b2a'), 1.45); }
+      return g;
+    };
+    const items = spots.map(([x, z], i) => { const g = make(); g.position.set(x, T.heightAt(x, z), z); g.userData.ph = i * 0.7; g.userData.base = g.position.y; this.group.add(g); const it = { type: 'collect', g, done: false }; this.items.push(it); return it; });
+    this.collect = { kind, label: SPEC[0], hint: SPEC[1], items, got: 0 };
+    this.w.ui?.toast?.(`🎁 ${SPEC[1]}`, `캠퍼스 곳곳에 ${items.length}개 · 눌러서 모아요`, 'gold');
+  }
+
+  flagTex() { if (!this._flagTex) { this._flagTex = new THREE.CanvasTexture(taegukgiCanvas(256)); this._flagTex.colorSpace = THREE.SRGBColorSpace; } return this._flagTex; }
+
+  // 화면을 누른 자리 근처(36px)에 모을 물건이 있으면 모아요
+  pickScreen(sx, sy, camera, rect) {
+    const C = this.collect;
+    if (!C) return false;
+    let best = null, bd = 36;
+    for (const it of C.items) {
+      if (it.done) continue;
+      const p = it.g.position.clone(); p.y += it.g.userData.float || 1;
+      p.project(camera);
+      if (p.z > 1) continue;
+      const x = rect.left + ((p.x + 1) / 2) * rect.width, y = rect.top + ((1 - p.y) / 2) * rect.height, d = Math.hypot(x - sx, y - sy);
+      if (d < bd) { bd = d; best = it; }
+    }
+    if (!best) return false;
+    best.done = true; C.got++;
+    const u = best.g.userData, P = best.g.position.clone().add(new THREE.Vector3(0, (u.float || 1) + 0.5, 0));
+    if (C.kind === 'chuseok') { u.top.material.emissiveIntensity = 1.4; u.top.material.color.set('#d63a4a'); u.bot.material.emissiveIntensity = 1.0; u.bot.material.color.set('#2f4fb0'); }
+    else if (u.flag) u.flag.visible = true;
+    else if (u.tree) { u.tree.visible = true; u.ring.visible = false; u.grow = 0; }
+    else best.g.visible = false;
+    this.w.fx.burst?.(P, new THREE.Color(C.kind === 'valentine' ? '#ff5d8f' : C.kind === 'newyear' ? '#ffd700' : '#ffffff'), 40);
+    this.onCollect?.(C.got, C.items.length, C.label, C.kind);
+    return true;
   }
 
   clear() {
     while (this.group.children.length) this.group.remove(this.group.children[0]);
     this.items = [];
+    this.collect = null;
     this.drones = null;
     this.jelly = false;
     for (const b of this.buildings.list) this.unjelly(b);
@@ -123,6 +188,7 @@ export class Celebrations {
   enable(kind) {
     this.clear();
     this.kind = kind;
+    setTimeout(() => { if (this.kind === kind) this.spawnCollect(kind); }, 0);
     this.t = 0;
     const T = this.w.terrain, P = this.pitch;
     const at = (x, z, y = 0) => new THREE.Vector3(x, T.heightAt(x, z) + y, z);
@@ -477,6 +543,13 @@ export class Celebrations {
     // 졸업식: 운동장에서 학사모가 하늘로
     if (this.kind === 'graduation') { this.capT = (this.capT || 0) - dt; if (this.capT <= 0) { this.capT = 3.5; const P = this.pitch; this.caps.spawn(new THREE.Vector3(P.cx + (Math.random() - 0.5) * P.L * 0.6, this.w.terrain.heightAt(P.cx, P.cz), P.cz + (Math.random() - 0.5) * P.W * 0.6), 10, 18, 1.6); } }
     for (const it of this.items) {
+      if (it.type === 'collect') {
+        const u = it.g.userData;
+        if (!it.done && u.float) { it.g.position.y = u.base + Math.sin(t * 1.6 + u.ph) * 0.3; it.g.rotation.y += dt * 0.8; }
+        if (!it.done && u.fly) { it.g.position.x += Math.sin(t * 0.5 + u.ph) * dt * 2; it.g.position.z += Math.cos(t * 0.4 + u.ph) * dt * 2; }
+        if (u.tree && it.done && u.grow < 1) { u.grow = Math.min(1, u.grow + dt * 1.5); u.tree.scale.setScalar(Math.max(0.01, u.grow)); }
+        continue;
+      }
       if (it.type === 'flag') it.m.rotation.y = Math.sin(t * 3 + it.ph) * 0.25;
       else if (it.type === 'kite') {
         it.m.position.set(it.base.x + Math.sin(t * 0.7 + it.ph) * 3, it.base.y + Math.sin(t * 1.1 + it.ph) * 1.5, it.base.z + Math.cos(t * 0.6 + it.ph) * 3);

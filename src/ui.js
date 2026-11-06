@@ -491,6 +491,8 @@ export class UI {
     $('info-items').innerHTML = (f.items || []).map((x) => `<li>${x}</li>`).join('');
     $('info-meal').hidden = !f.meal;
     $('info-pickle').hidden = !f.meal;
+    $('info-enter').hidden = !/^본관(\s|$)/.test(f.title || '') || /증축/.test(f.title || '');
+    $('info-enter').dataset.b = '본관';
     this.modal('info', true);
   }
 

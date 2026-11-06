@@ -57,6 +57,9 @@ import { Construction, planSite } from './construction.js';
 import { ParkedCars } from './parking.js';
 import { planTerrace, shapeTerrace, buildTerrace } from './terrace.js';
 import { DevMenu } from './devmenu.js';
+import { Visuals } from './visual.js';
+import { Interior } from './interior.js';
+import { Online, EMOTES } from './online.js';
 import { campaign, STAGES, stationSVG } from './campaign.js';
 import { Album, LetterCard } from './keepsake.js';
 import { makeAvatar, animateAvatar, uniformFor } from './avatars.js';
@@ -101,6 +104,19 @@ async function start() {
     cfg.supplement = { ...(sc.supplement || {}), ...(cfg.supplement || {}) };
     for (const k of ['entrance', 'founding', 'graduation', 'sportsDay', 'festival']) if (sc[k] && !cfg[k]) cfg[k] = sc[k];
   } catch { /* 없으면 그대로 */ }
+  // 2.0 베타: 초대 코드(data/beta.json) · 건물 내부(data/interiors.json)
+  try { cfg.beta = await loadJSON('data/beta.json'); } catch { cfg.beta = null; }
+  try { cfg.interiors = await loadJSON('data/interiors.json'); } catch { cfg.interiors = {}; }
+  if (cfg.beta?.code) {
+    let ok = false; try { ok = localStorage.getItem('smash-beta-ok') === cfg.beta.code; } catch { /* 무시 */ }
+    const gate = document.getElementById('beta-gate');
+    if (!ok) {
+      gate.hidden = false;
+      const tryCode = () => { const v = document.getElementById('beta-code').value.trim().toLowerCase(); if (v === String(cfg.beta.code).toLowerCase()) { try { localStorage.setItem('smash-beta-ok', cfg.beta.code); } catch { /* 무시 */ } gate.classList.add('out'); setTimeout(() => { gate.hidden = true; }, 400); } else { document.getElementById('beta-msg').textContent = '코드가 맞지 않아요'; } };
+      document.getElementById('beta-go').addEventListener('click', tryCode);
+      document.getElementById('beta-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryCode(); });
+    }
+  }
   // 버스 정류장 2곳(data/bus.json)
   try { const bj = await loadJSON('data/bus.json'); cfg.bus = { ...(cfg.bus || {}), stops: bj.stops, routeInfo: bj.routes, seen: bj.seen }; } catch { /* 없으면 그대로 */ }
   let campus;
@@ -281,10 +297,15 @@ async function start() {
   const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 1, 6000);
   const focus = campus.boundary ? centroid(campus.boundary) : [0, 0];
   const fy = terrain.heightAt(focus[0], focus[1]);
-  const home = {
-    target: new THREE.Vector3(focus[0], fy, focus[1]),
-    pos: new THREE.Vector3(focus[0] - span * 0.32, fy + span * 0.48, focus[1] + span * 0.62),
-  };
+  // 기본 시점: 운동장 쪽 하늘에서 본관 정면을 바라봐요(학교 정면 사진처럼). 세로 화면은 조금 더 멀리.
+  const home = (() => {
+    const mb = bdata.find((b) => b.name === '본관'), bp = bigPitch;
+    if (!mb || !bp) return { target: new THREE.Vector3(focus[0], fy, focus[1]), pos: new THREE.Vector3(focus[0] - span * 0.32, fy + span * 0.48, focus[1] + span * 0.62) };
+    const mc = centroid(mb.poly), pc = centroid(bp), L = Math.hypot(pc[0] - mc[0], pc[1] - mc[1]) || 1, nx = (pc[0] - mc[0]) / L, nz = (pc[1] - mc[1]) / L;
+    const tx = mc[0] + nx * L * 0.45, tz = mc[1] + nz * L * 0.45, ty = terrain.heightAt(tx, tz);
+    const far = span * (innerWidth < innerHeight ? 0.95 : 0.7);
+    return { target: new THREE.Vector3(tx, ty, tz), pos: new THREE.Vector3(tx + nx * far - nz * far * 0.12, ty + far * 0.55, tz + nz * far + nx * far * 0.12) };
+  })();
   camera.position.copy(home.pos);
   const controls = new MapControls(camera, renderer.domElement);
   controls.target.copy(home.target);
@@ -445,6 +466,37 @@ async function start() {
       try { site = new Construction(world, { mainB, dorm, pitch: bigPitch ? orientedBox(bigPitch) : null, cart, override: cfg.construction, roads: campus.roads || [] }); } catch (e) { console.warn('공사장', e); }
     }
   }
+  // 이름표가 서로 겹치면 작은 건물 이름표를 잠시 숨겨요(0.5초마다)
+  {
+    let t = 0; const v = new THREE.Vector3();
+    world.declutter = (dt) => {
+      t -= dt; if (t > 0) return; t = 0.5;
+      const shown = [], W = innerWidth, H = innerHeight;
+      for (const b of [...buildings.list].sort((a, c) => c.totalVolume - a.totalVolume)) {
+        const el = b.label?.element; if (!el || !b.label.visible) continue;
+        v.copy(b.label.position); b.label.parent?.localToWorld?.(v); v.project(camera);
+        const x = ((v.x + 1) / 2) * W, y = ((1 - v.y) / 2) * H, w = (b.name || '').length * 13 + 22, h = 26;
+        const hit = shown.some((r) => Math.abs(r.x - x) < (r.w + w) / 2 && Math.abs(r.y - y) < h);
+        el.classList.toggle('lb-hide', hit);
+        if (!hit) shown.push({ x, y, w });
+      }
+    };
+  }
+  // ---------- 2.0 비주얼 ----------
+  const visuals = new Visuals({ renderer, scene, camera, controls, sky, sun, terrain, roads: campus.roads || [] });
+  world.visuals = visuals;
+  // ---------- 2.0 한빛 인사이드(건물 안) ----------
+  let insideSaved = null;
+  const interior = new Interior({ renderer, hap: null, toast: (a, b) => ui.toast(a, b), onExit: () => { controls.enabled = true; if (insideSaved) { camera.position.copy(insideSaved.p); controls.target.copy(insideSaved.t); } ui.toast('밖으로 나왔어요', ''); } });
+  world.enterBuilding = (name, floor = '1F') => {
+    const data = cfg.interiors?.[name]?.[floor];
+    if (!data) { ui.toast('아직 안을 볼 수 없어요', `${name} 층 안내도를 받으면 열려요`); return; }
+    const today = (typeof ttRows !== 'undefined' && ttRows?.length) ? ttRows.map((r) => `${r.period}교시 ${r.subject}`).slice(0, 4).join(' · ') : '';
+    if (interior.name !== name || interior.floor !== floor) interior.build(name, floor, data, { blackboard: today });
+    insideSaved = { p: camera.position.clone(), t: controls.target.clone() };
+    controls.enabled = false; ui.modal('info', false);
+    interior.enter(); tele.track('inside', { name, floor });
+  };
   // ---------- 기념일 에디션 연출 ----------
   const CELEB = ['halloween', 'stickday', 'anniv', 'teachers', 'sports', 'festival', 'entrance', 'graduation', 'hangul', 'parents', 'children', 'aprilfools', 'science', 'firstsnow', 'newyear', 'seollal', 'chuseok', 'valentine', 'whiteday', 'samil', 'gwangbok', 'arbor', 'earth', 'students', 'dongji'];
   world.seasons = seasons;
@@ -561,7 +613,11 @@ async function start() {
   }
   document.getElementById('btn-block').hidden = !BlockUnlock.has();
   document.getElementById('btn-block').addEventListener('click', toggleBlock);
-  const launcher = new Launcher({ hap, blockUnlocked: () => BlockUnlock.has(), blockOn: () => blockWorld.active, onBlock: toggleBlock, onGame: (id) => world.openGame?.(id) });
+  const launcher = new Launcher({ hap, blockUnlocked: () => BlockUnlock.has(), blockOn: () => blockWorld.active, onBlock: toggleBlock, onGame: (id) => world.openGame?.(id),
+    online: () => !!world.onlineMode,
+    onOnline: () => {
+      world.setOnline?.(!world.onlineMode).then((on) => { tele.track('online', { on }); launcher.render?.(); });
+    } });
   // ---------- 학교 공용 기능 · 함께 보기 · 피클볼 · 수능 편지 ----------
   const net = new SchoolNet(cfg);
   const presence = new Presence(cfg);
@@ -646,6 +702,7 @@ async function start() {
   ui.setBatSizes(BAT_SIZES);
   const toolRadius = (t) => (t.id === 'quake' ? quakeParams(tools.intensity).R : t.id === 'bat' ? BAT_SIZES[tools.batSize - 1].R : t.R);
   function selectTool(id) {
+    world.online?.setTool(id);
     tools.holdEnd();
     world.hap?.play('select');
     if (typeof robodog !== 'undefined' && robodog.active && id !== 'robodog') robodog.stop(camera);
@@ -730,6 +787,7 @@ async function start() {
     for (const b of res.collapses) {
       tele.track('collapse', { b: b.name || b.id, tool: o.tool });
       const C = new THREE.Vector3(b.c2[0], b.base + 4, b.c2[1]);
+      visuals.dust(C, Math.min(26, 8 + (b.levels || 3) * 3));
       if (b.name === '인재원 Ⅱ') { extras.soccer(C); badges.give('soccer'); ui.toast('⚽ 축구공 대방출!', '축구부 기숙사에서 공이 쏟아져요'); }
       // 부모님께 쓰는 쪽지: 어버이날엔 매번, 가정의 달(5월)엔 10%
       if (world.edition === 'parents' || (simDate.getMonth() === 4 && Math.random() < 0.1)) setTimeout(() => world.showNote?.(), 900);
@@ -924,6 +982,7 @@ async function start() {
       }
       const animal = wildlife.pickScreen(e.clientX, e.clientY, camera, rect);
       if (animal) { sound.animal(animal.id); registerDex(animal.id); down = null; return; }
+      if (celebrate.pickScreen(e.clientX, e.clientY, camera, rect)) { down = null; return; }
       ndc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
       ray.setFromCamera(ndc, camera);
       // 택배차
@@ -1063,6 +1122,7 @@ async function start() {
     controls.autoRotate = on;
     controls.autoRotateSpeed = 0.5;
     if (on) badges.give('photo');
+    visuals.photoDOF(on);
   }
   document.getElementById('btn-photo').addEventListener('click', () => setPhoto(true));
   document.getElementById('photo-exit').addEventListener('click', () => setPhoto(false));
@@ -1280,7 +1340,17 @@ async function start() {
     onReward: (kind, val, lv) => { if (kind === 'skin') skinStore.add(val); if (lv >= 30) badges.give('season30'); },
   });
   world.pass = pass;
-  const GAMES = { race: () => { const g = race(); g.onSector = () => badges.give('secbeat'); g.onGhost = () => badges.give('ghostbeat'); return g; }, soccer, basketball, tycoon, crane, meteor, landing, docking };
+  const GAMES = { race: () => { const g = race(); g.onSector = () => badges.give('secbeat'); g.onGhost = () => badges.give('ghostbeat'); g.onRival = () => badges.give('rivalbeat');
+    g.onLap = (t, samples) => { if (world.onlineMode) online.submitGhost(g.circuit, g.week, t, samples, presence.me.nick); };
+    g.onRank = async (box) => {
+      if (!box || !online.available) return;
+      box.innerHTML = '<p class="arc-x-t">이번 주 전교 순위 불러오는 중…</p>';
+      const rows = await online.weeklyTop(g.circuit, g.week);
+      const fmt = (ms) => `${Math.floor(ms / 60000)}:${((ms % 60000) / 1000).toFixed(3).padStart(6, '0')}`;
+      box.innerHTML = rows.length ? `<p class="arc-x-t">이번 주 전교 순위</p><ol class="gp-rank">${rows.map((r, i) => `<li><b>${i + 1}</b><span>${r.name}${r.grade ? ` · ${r.grade}학년` : ''}</span><em>${fmt(r.lap_ms)}</em>${i < 3 ? `<button type="button" data-c="${r.client}">고스트와 달리기</button>` : ''}</li>`).join('')}</ol>` : '<p class="arc-x-t">이번 주 전교 기록이 아직 없어요. 온라인을 켜고 달리면 첫 기록이 돼요</p>';
+      for (const b of box.querySelectorAll('button[data-c]')) b.addEventListener('click', async () => { b.textContent = '불러오는 중…'; const gh = await online.ghost(g.circuit, g.week, b.dataset.c); g.setRival(gh); b.textContent = gh ? '✓ 고스트 준비됨' : '불러오지 못했어요'; });
+    };
+    return g; }, soccer, basketball, tycoon, crane, meteor, landing, docking };
   const arcade = new Arcade({
     hap, sound,
     onResult: (id, r, better) => {
@@ -1297,6 +1367,18 @@ async function start() {
       if (id === 'crane') { const n = craneProgress.add(r.score); site?.setProgress(n); if (n >= 50) badges.give('builder'); }
     },
   });
+  celebrate.onCollect = (got, total, label, kind) => {
+    sound.pop?.(); hap.play('tap');
+    ui.toast(`${label} ${got}/${total}`, got === total ? '전부 모았어요! 시즌 +100 XP' : '', got === total ? 'gold' : undefined);
+    if (got === total) { badges.give('edcollect'); pass.add(100, `collect-${kind}`); tele.track('edcollect', { kind }); }
+  };
+  // ---------- 온라인 모드(2.0) ----------
+  const online = new Online({ cfg, presence, world, ui, hap, grade: () => board.grade || 0, onBadge: (b) => badges.give(b), onXP: (x) => pass.add(x, 'raid') });
+  world.online = online;
+  const emoteBar = document.getElementById('emote-bar');
+  emoteBar.innerHTML = EMOTES.map((e) => `<button type="button" data-e="${e}" aria-label="${e} 보내기">${e}</button>`).join('');
+  for (const b of emoteBar.querySelectorAll('button')) b.addEventListener('click', () => online.emote(b.dataset.e));
+  world.setOnline = async (on) => { const r = await online.setOn(on); world.onlineMode = r; emoteBar.hidden = !r; document.body.classList.toggle('is-online', r); return r; };
   world.openGame = (id) => {
     if (id === 'campaign') { launcher.close(true); return openCampaign(); }
     if (!GAMES[id]) return; launcher.close(true); arcade.open(GAMES[id]());
@@ -1472,6 +1554,7 @@ async function start() {
   const openPickle = () => { ui.modal('info', false); pickle.open(); tele.track('open', { id: 'pickle' }); };
   document.getElementById('btn-pickle').addEventListener('click', openPickle);
   document.getElementById('info-pickle').addEventListener('click', openPickle);
+  document.getElementById('info-enter').addEventListener('click', () => world.enterBuilding(document.getElementById('info-enter').dataset.b));
 
   // ---------- 건의함 ----------
   {
@@ -1712,6 +1795,8 @@ async function start() {
       try { if (!localStorage.getItem(k)) { localStorage.setItem(k, simDate.toDateString()); if (!world.edition) applyEdition(true); } } catch { /* 무시 */ }
     }
     seasons.setWeather(wx?.kind === 'clear' || wx?.kind === 'cloud' ? null : wx?.kind || null);
+    visuals.setWeather(wx?.kind);
+    visuals.refreshEnv(true);
     if (dispHour !== null) applySky(dispHour);
   }
   function renderSkyPanel() {
@@ -2027,13 +2112,15 @@ async function start() {
   let hoverTimer = 0, slowTimer = 0, sendTimer = 20, boardTimer = 30;
   // 20초 동안 아무 조작이 없으면 한 프레임 걸러 그려요(초당 30번) → 팬 소음·전력 줄이기
   let lastInput = performance.now(), skip = false, shadowTick = false;
+  const isTouch = matchMedia('(pointer: coarse)').matches; // 폰·패드
   for (const ev of ['pointerdown', 'pointermove', 'wheel', 'keydown', 'touchstart']) addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true });
   renderer.setAnimationLoop(() => {
-    const idle = performance.now() - lastInput > 20000 && !cinema.active && !document.body.classList.contains('arc-on');
+    const idle = performance.now() - lastInput > (isTouch ? 3000 : 8000) && !cinema.active && !document.body.classList.contains('arc-on');
     skip = idle ? !skip : false;
     if (skip) return;
     shadowTick = !shadowTick; renderer.shadowMap.needsUpdate = idle || shadowTick;
     const dt = Math.min(clock.getDelta(), 1 / 20);
+    if (interior.active) { interior.update(dt); if (interior.active) { interior.render(); return; } }
     if (spin) {
       spin.t = Math.min(1, spin.t + dt / 0.7);
       const u = spin.t * spin.t * (3 - 2 * spin.t);
@@ -2163,8 +2250,17 @@ async function start() {
     if (holding || director.busy || robodog.active) reticle.visible = false;
 
     cinema.update(dt);
+    visuals.update(dt, { skyColor: skyNow?.fog, night });
+    world.declutter?.(dt);
+    if (world.onlineMode) {
+      const me = walk.active ? { x: walk.pos.x, z: walk.pos.z, r: camera.rotation.y } : { x: controls.target.x, z: controls.target.z, r: Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z) };
+      me.tool = tool?.id || 'bomb';
+      online.tick(dt, me);
+      const boss = buildings.list.find((b) => b.name === '본관');
+      if (boss) online.noteBoss(boss.lostFraction());
+    }
     camera.position.add(fx.shakeOff);
-    renderer.render(scene, camera);
+    if (!visuals.render()) renderer.render(scene, camera);
     camera.position.sub(fx.shakeOff);
     labels.render(scene, camera);
   });
@@ -2212,8 +2308,9 @@ async function start() {
   document.getElementById('btn-cinema').addEventListener('click', () => { document.body.classList.remove('more-open'); cinema.start(); });
 
   // ---------- 화질 자동 조절 ----------
-  const gfx = new Quality({ renderer, sun, seasons, onChange: (lv) => { const el = document.getElementById('set-q-now'); if (el) el.textContent = `지금 ${LEVELS[lv].name}`; } });
+  const gfx = new Quality({ renderer, sun, seasons, onChange: (lv) => { visuals.setLevel(matchMedia('(pointer: coarse)').matches ? Math.min(lv, 1) : lv); const el = document.getElementById('set-q-now'); if (el) el.textContent = `지금 ${LEVELS[lv].name}`; } });
   gfx.apply(gfx.level);
+  visuals.setLevel(matchMedia('(pointer: coarse)').matches ? Math.min(gfx.level, 1) : gfx.level);
 
   // ---------- 첫 실행 안내 ----------
   const onboard = new Onboard();
@@ -2231,7 +2328,7 @@ async function start() {
     for (const b of $id('set-quality').querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === gfx.mode);
     $id('set-q-now').textContent = `지금 ${LEVELS[gfx.level].name}`;
     $id('set-install').hidden = !installEvt;
-    $id('set-ver').textContent = `SMASH 한빛 v1.9.7 · 배지 ${badges.list().filter((x) => x.got).length}/${badges.list().length}`;
+    $id('set-ver').textContent = `SMASH 한빛 v2.0.1 · 배지 ${badges.list().filter((x) => x.got).length}/${badges.list().length}`;
   }
   $id('btn-settings').addEventListener('click', () => { syncSettings(); ui.modal('settings', true); });
   $id('set-close').addEventListener('click', () => ui.modal('settings', false));
@@ -2313,6 +2410,11 @@ async function start() {
         loadEvents(); loadCheers();
       } catch (e) { fail(e); }
     });
+    const flagBtn = (id, flag, label) => $id(id).addEventListener('click', async () => {
+      const on = $id(id).getAttribute('aria-pressed') !== 'true';
+      try { await online.setFlag(tkey, flag, on); $id(id).setAttribute('aria-pressed', String(on)); msg(`${label} ${on ? '켰어요' : '껐어요'}`); } catch (e) { msg(String(e.message || e)); }
+    });
+    flagBtn('tc-online-off', 'online_off', '온라인 전체 끄기를'); flagBtn('tc-raid-off', 'raid_off', '레이드 끄기를');
     for (const b of $id('tc-tabs').querySelectorAll('button')) b.addEventListener('click', () => {
       for (const x of $id('tc-tabs').querySelectorAll('button')) x.classList.toggle('on', x === b);
       for (const sec of $id('tc-body').querySelectorAll('section[data-tab]')) sec.hidden = sec.dataset.tab !== b.dataset.v;
@@ -2367,6 +2469,11 @@ async function start() {
     add('학교', `증축동 ${extBuilt ? '공사 중 모습' : '완공 모습'} 보기`, () => { const u = new URL(location.href); u.searchParams.set('built', extBuilt ? '0' : '1'); location.href = u.toString(); }, '새로고침');
     add('학교', '크레인 진행률 +20', () => { const n = craneProgress.add(20); site?.setProgress(n); return `짐 ${n}개`; });
     add('학교', '보충 알파벳 보기', () => showSupplement());
+    add('2.0 베타', '본관 1층 안으로 들어가기', () => world.enterBuilding('본관', '1F'));
+    add('2.0 베타', '비 내리기(물웅덩이 확인)', () => { setWeatherMode('rain'); visuals.wet = 0.8; return '물웅덩이가 생겨요'; });
+    add('2.0 베타', '노을(빛줄기 확인)', () => setTimeMode('sunset'));
+    add('2.0 베타', '사진 모드(아웃포커스)', () => document.getElementById('btn-photo').click());
+    add('2.0 베타', '베타 초대 코드 다시 묻기', () => { localStorage.removeItem('smash-beta-ok'); location.reload(); });
     for (const [m, nm] of [['dawn', '새벽'], ['day', '낮'], ['sunset', '노을'], ['night', '밤'], ['sync', '실시간']]) add('시간·날씨', `시간: ${nm}`, () => setTimeMode(m));
     for (const [m, nm] of [['clear', '맑음'], ['rain', '비'], ['snow', '눈'], ['fog', '안개'], ['sync', '실시간']]) add('시간·날씨', `날씨: ${nm}`, () => setWeatherMode(m));
     add('도구', 'HASA 관제센터', () => { location.href = 'hasa.html'; }, 'Control + Shift + H');

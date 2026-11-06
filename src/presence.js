@@ -29,7 +29,7 @@ export class Presence {
 
   async client() {
     if (this.sb) return this.sb;
-    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
     this.sb = createClient(this.url, this.key, { auth: { persistSession: false } });
     return this.sb;
   }
