@@ -497,12 +497,37 @@ export class UI {
   }
 
   // 실시간 도착 정보(중계 함수가 있으면)
-  setBusLive(list, err) {
-    const box = $('bus-live');
-    if (list === undefined) { box.innerHTML = ''; return; }
-    if (list === null) { box.innerHTML = '<p class="live-tag">● 실시간 도착 정보 불러오는 중…</p>'; return; }
-    if (err) { box.innerHTML = `<p class="bus-note">실시간 정보를 불러오지 못했어요(${err}). 아래는 시간표 기준이에요.</p>`; return; }
-    box.innerHTML = '<p class="live-tag">● 실시간</p>' + (list.length ? list.slice(0, 6).map((b) => `<div class="bus-row"><b>${b.no}</b><span>${b.min <= 1 ? '곧 도착' : `${b.min}분 뒤`}<br><small>${b.stops}정류장 전</small></span></div>`).join('') : '<p class="bus-note">지금 오는 버스가 없어요.</p>');
+  // 실시간 도착 안내판(BIS) — 공공데이터 결과로 채워요
+  setBusLive(data, err) {
+    const box = $('bus-list'), st = this.busStop, bus = this.busData || {};
+    if (!st) return;
+    const info = bus.routeInfo || {}, TYPE = { 간선: '#2f6fe0', 지선: '#30a14e', 외곽: '#7cb518', 급행: '#e8452c', 마을: '#8e8e93' };
+    const buses = Array.isArray(data) ? data : data?.buses || [];
+    const now = new Date(), hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    // 노선마다 가장 빨리 오는 차 한 대
+    const first = {};
+    for (const x of buses) if (!first[x.no]) first[x.no] = x;
+    const order = [...st.routes].sort((p, q) => (first[p]?.sec ?? 1e9) - (first[q]?.sec ?? 1e9));
+    for (const no of Object.keys(first)) if (!order.includes(no)) order.push(no);
+    const typeOf = (no) => (first[no]?.type || '').replace('버스', '') || info[no]?.type || '';
+    const row = (no) => {
+      const x = first[no], c = TYPE[typeOf(no)] || '#2f6fe0', dest = st.dest?.[no] || info[no]?.ends || '';
+      let eta, pos;
+      if (data === null) { eta = '<em>…</em>'; pos = '<span class="bis-wait">불러오는 중</span>'; }
+      else if (x) {
+        eta = x.sec <= 90 || x.stops <= 1 ? '<em class="soon">곧 도착</em>' : `<em>${x.min}분</em>`;
+        const k = Math.max(0, Math.min(5, x.stops));
+        pos = `<span class="bis-track">${[5, 4, 3, 2, 1].map((i) => `<i class="${i === k ? 'bus' : ''}"></i>`).join('')}<b>현위치</b></span><small>${x.stops}정류장 전${x.low ? ' · 저상' : ''}</small>`;
+      } else { eta = '<em class="wait">운행<br>대기</em>'; pos = `<span class="bis-wait">${st.wait?.[no] || '도착 정보 없음'}</span>`; }
+      return `<div class="bis-row"><span class="bis-no" style="--c:${c}">🚌 ${no}</span><span class="bis-dest">${dest}</span><span class="bis-eta">${eta}</span><span class="bis-pos">${pos}</span></div>`;
+    };
+    const coming = buses.filter((x) => x.sec <= 90 || x.stops <= 1);
+    const temp = typeof bus.temp === 'number' ? `${Math.round(bus.temp)}℃` : '';
+    box.innerHTML = `<div class="bis"><div class="bis-head"><b>버스도착예정시간안내</b><span>${err ? '연결 안 됨' : data && !err ? '● 실시간' : ''} ${hhmm}</span></div>
+      <div class="bis-cols"><span>노선번호</span><span>종착지</span><span>예정시간</span><span>버스위치</span></div>
+      ${order.map(row).join('')}
+      <div class="bis-now"><b>진입차량</b><span>${coming.length ? coming.map((x) => `${x.no}번`).join(' · ') + ' 곧 도착' : ''}</span>${temp ? `<i>현재 ${temp}</i>` : ''}</div></div>
+      ${err ? `<p class="bus-note">실시간 정보를 불러오지 못했어요(${err}).</p>` : bus.liveUrl ? '' : '<p class="bus-note">실시간 연결 전이라 노선만 보여요.</p>'}`;
   }
 
   showBus(bus) {
@@ -512,13 +537,11 @@ export class UI {
       this.busStop = this.busStop && stops.find((x) => x.id === this.busStop.id) ? this.busStop : stops[0];
       const st = this.busStop, info = bus.routeInfo || {}, seen = bus.seen?.[st.id] || {};
       $('bus-tabs').innerHTML = stops.map((x) => `<button type="button" data-id="${x.id}" class="${x.id === st.id ? 'on' : ''}">${x.label}<small>${x.ars}</small></button>`).join('');
-      $('bus-tabs').hidden = false;
+      $('bus-tabs').hidden = stops.length < 2;
       for (const t of $('bus-tabs').querySelectorAll('button')) t.onclick = () => { this.busStop = stops.find((x) => x.id === t.dataset.id); this.onBusStop ? this.onBusStop() : this.showBus(bus); };
       $('bus-sub').textContent = `${st.ars} · ${st.toward}`;
-      box.innerHTML = st.routes.map((no) => {
-        const r = info[no] || {}, c = TYPE[r.type] || '#8e8e93', s0 = seen[no];
-        return `<div class="bus-row bus-r2"><b style="--c:${c}"><i>${r.type || ''}</i>${no}</b><span>${r.ends || ''}${s0 ? `<br><small>최근 같은 요일 기록 ${s0.join(' · ')}</small>` : ''}</span></div>`;
-      }).join('') + `<p class="bus-note">${bus.liveUrl ? '위쪽은 실시간 도착 정보, 아래는 정류장 노선이에요.' : '실시간 도착 정보는 공공데이터 연결 후에 떠요. 지금은 노선 안내예요.'}</p>`;
+      this.busData = bus;
+      this.setBusLive(bus.liveUrl ? null : undefined);
       $('bus-link').href = `https://map.kakao.com/?q=${encodeURIComponent(`한빛고교 ${st.ars}`)}`;
       this.modal('bus', true);
       return;

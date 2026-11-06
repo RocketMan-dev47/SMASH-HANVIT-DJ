@@ -1602,12 +1602,19 @@ async function start() {
   // ---------- 실시간 버스 ----------
   {
     const showBus0 = ui.showBus.bind(ui);
+    let busTimer = 0;
     ui.showBus = async (bus) => {
+      bus = { ...bus, liveUrl: cfg.bus?.liveUrl, temp: wx?.manual ? undefined : wx?.temp };
       showBus0(bus);
       ui.onBusStop = () => ui.showBus(bus);
-      if (!cfg.bus?.liveUrl) { ui.setBusLive(undefined); return; }
-      ui.setBusLive(null);
-      try { ui.setBusLive(await net.busLive(ui.busStop?.ars)); } catch (e) { ui.setBusLive([], e.message); }
+      clearInterval(busTimer);
+      if (!cfg.bus?.liveUrl) return;
+      const load = async () => {
+        if (document.getElementById('bus').hidden) { clearInterval(busTimer); return; }
+        try { ui.setBusLive(await net.busLive(ui.busStop?.ars)); } catch (e) { ui.setBusLive([], e.message); }
+      };
+      await load();
+      busTimer = setInterval(load, 20000); // 열려 있는 동안 20초마다
     };
   }
 
@@ -2354,7 +2361,7 @@ async function start() {
     for (const b of $id('set-quality').querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === gfx.mode);
     $id('set-q-now').textContent = `지금 ${LEVELS[gfx.level].name}`;
     $id('set-install').hidden = !installEvt;
-    $id('set-ver').textContent = `SMASH 한빛 v2.0.5 · 배지 ${badges.list().filter((x) => x.got).length}/${badges.list().length}`;
+    $id('set-ver').textContent = `SMASH 한빛 v2.0.6 · 배지 ${badges.list().filter((x) => x.got).length}/${badges.list().length}`;
   }
   $id('btn-settings').addEventListener('click', () => { syncSettings(); ui.modal('settings', true); });
   $id('set-close').addEventListener('click', () => ui.modal('settings', false));

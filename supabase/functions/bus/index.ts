@@ -27,13 +27,18 @@ Deno.serve(async (req) => {
   const api = `https://apis.data.go.kr/1613000/ArvlInfoInqireService/getSttnAcctoArvlPrearngeInfoList?serviceKey=${encodeURIComponent(key)}&_type=json&cityCode=${CITY}&nodeId=${node}&numOfRows=30`;
   try {
     const r = await fetch(api);
-    const d = await r.json();
+    const text = await r.text();
+    let d: any = null;
+    try { d = JSON.parse(text); } catch { return new Response(JSON.stringify({ error: (text.match(/<returnAuthMsg>([^<]+)/)?.[1] || text.slice(0, 120)) }), { status: 502, headers: cors }); }
+    const code = d?.response?.header?.resultCode;
+    if (code && code !== '00') return new Response(JSON.stringify({ error: d?.response?.header?.resultMsg || code }), { status: 502, headers: cors });
     let items = d?.response?.body?.items?.item ?? [];
     if (!Array.isArray(items)) items = [items];
-    const out = items.map((x: Record<string, unknown>) => ({
-      no: String(x.routeno), min: Math.round(Number(x.arrtime) / 60), stops: Number(x.arrprevstationcnt), type: String(x.routetp ?? ''),
-    })).sort((a: { min: number }, b: { min: number }) => a.min - b.min);
-    return new Response(JSON.stringify(out), { headers: cors });
+    const buses = items.map((x: Record<string, unknown>) => ({
+      no: String(x.routeno), type: String(x.routetp ?? ''), sec: Number(x.arrtime), min: Math.max(0, Math.round(Number(x.arrtime) / 60)),
+      stops: Number(x.arrprevstationcnt), low: String(x.vehicletp ?? '').includes('저상'), stop: String(x.nodenm ?? ''),
+    })).sort((a: { sec: number }, b: { sec: number }) => a.sec - b.sec);
+    return new Response(JSON.stringify({ node, buses, at: new Date().toISOString() }), { headers: cors });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 502, headers: cors });
   }
