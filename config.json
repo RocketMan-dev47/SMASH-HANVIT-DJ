@@ -277,7 +277,8 @@
       -35.3
     ],
     "yaw": -52,
-    "routes": []
+    "routes": [],
+    "liveUrl": "https://uoeznijvbgnugwbdcfgg.supabase.co/functions/v1/bus"
   },
   "turtleRock": {
     "at": [
