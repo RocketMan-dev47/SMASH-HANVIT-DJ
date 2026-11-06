@@ -1333,6 +1333,18 @@ async function start() {
     if (box) { box.checked = world.autoSound(); box.addEventListener('change', () => { try { localStorage.setItem('smash-autosound', box.checked ? 'on' : 'off'); } catch { /* 무시 */ } }); }
   }
   world.cats = world.cats || cats;
+  {
+    const seg = document.getElementById('set-gender');
+    const cur = () => { try { return localStorage.getItem('smash-gender') || ''; } catch { return ''; } };
+    const paint = () => { for (const b of seg.querySelectorAll('button')) b.classList.toggle('on', b.dataset.g === cur()); };
+    for (const b of seg.querySelectorAll('button')) b.addEventListener('click', () => {
+      try { localStorage.setItem('smash-gender', b.dataset.g); } catch { /* 무시 */ }
+      presence.me.g = b.dataset.g; paint(); world.online?.refreshLooks(true);
+      ui.toast('아바타', b.dataset.g === 'f' ? '여학생 교복으로 바꿨어요' : '남학생 교복으로 바꿨어요');
+    });
+    if (cur()) presence.me.g = cur();
+    paint();
+  }
 
   // ---------- 미니게임 · 시즌 패스 ----------
   const pass = new SeasonPass({
@@ -1378,6 +1390,10 @@ async function start() {
   const emoteBar = document.getElementById('emote-bar');
   emoteBar.innerHTML = EMOTES.map((e) => `<button type="button" data-e="${e}" aria-label="${e} 보내기">${e}</button>`).join('');
   for (const b of emoteBar.querySelectorAll('button')) b.addEventListener('click', () => online.emote(b.dataset.e));
+  world.uniformNow = () => {
+    const today = simDate.toDateString() === new Date().toDateString();
+    return uniformFor(today && !wx?.manual ? wx?.temp : undefined, simDate.getMonth() + 1);
+  };
   world.setOnline = async (on) => { const r = await online.setOn(on); world.onlineMode = r; emoteBar.hidden = !r; document.body.classList.toggle('is-online', r); return r; };
   world.openGame = (id) => {
     if (id === 'campaign') { launcher.close(true); return openCampaign(); }
@@ -1660,6 +1676,7 @@ async function start() {
           if (o && o.userData.season !== uni) { dropAvatar(o); peerPins.delete(p.id); o = null; } // 날씨 바뀌면 동·하복 갈아입기
           if (!o) {
             o = makeAvatar(p, uni);
+            o.scale.setScalar(2.4);
             const el = document.createElement('div');
             el.className = 'av-name';
             el.style.setProperty('--c', p.color);
@@ -1960,6 +1977,7 @@ async function start() {
     if (snBanner) snBanner.visible = on;
   }
   function travel(date) {
+    setTimeout(() => world.online?.refreshLooks(), 1200);
     tele.track('travel', { to: `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}` });
     simDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12);
     foldRebuild(() => { applyEdition(true); applyWeather(); });
@@ -2253,7 +2271,7 @@ async function start() {
     visuals.update(dt, { skyColor: skyNow?.fog, night });
     world.declutter?.(dt);
     if (world.onlineMode) {
-      const me = walk.active ? { x: walk.pos.x, z: walk.pos.z, r: camera.rotation.y } : { x: controls.target.x, z: controls.target.z, r: Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z) };
+      const me = walk.active ? { x: walk.pos.x, z: walk.pos.z, r: walk.yaw, walking: true } : { x: controls.target.x, z: controls.target.z, r: Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z) };
       me.tool = tool?.id || 'bomb';
       online.tick(dt, me);
       const boss = buildings.list.find((b) => b.name === '본관');
@@ -2328,7 +2346,7 @@ async function start() {
     for (const b of $id('set-quality').querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === gfx.mode);
     $id('set-q-now').textContent = `지금 ${LEVELS[gfx.level].name}`;
     $id('set-install').hidden = !installEvt;
-    $id('set-ver').textContent = `SMASH 한빛 v2.0.2 · 배지 ${badges.list().filter((x) => x.got).length}/${badges.list().length}`;
+    $id('set-ver').textContent = `SMASH 한빛 v2.0.3 · 배지 ${badges.list().filter((x) => x.got).length}/${badges.list().length}`;
   }
   $id('btn-settings').addEventListener('click', () => { syncSettings(); ui.modal('settings', true); });
   $id('set-close').addEventListener('click', () => ui.modal('settings', false));

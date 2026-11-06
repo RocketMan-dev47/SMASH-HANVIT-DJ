@@ -96,9 +96,17 @@ export class Walk {
     }
     const gy = this.w.terrain.heightAt(this.pos.x, this.pos.z);
     this.pos.y = this.pos.y ? this.pos.y + (gy - this.pos.y) * Math.min(1, dt * 10) : gy;
-    camera.position.set(this.pos.x, this.pos.y + 1.7, this.pos.z);
     const look = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch));
-    camera.lookAt(camera.position.clone().add(look));
+    if (this.w.onlineMode) {
+      // 온라인: 내 아바타 어깨 너머로(뒤 3 m, 위 0.6 m)
+      const eye = new THREE.Vector3(this.pos.x, this.pos.y + 1.6, this.pos.z), back = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+      camera.position.copy(eye).addScaledVector(back, -3).add(new THREE.Vector3(0, 0.6, 0));
+      const gy2 = this.w.terrain.heightAt(camera.position.x, camera.position.z); if (camera.position.y < gy2 + 0.6) camera.position.y = gy2 + 0.6;
+      camera.lookAt(eye.clone().addScaledVector(look, 6));
+    } else {
+      camera.position.set(this.pos.x, this.pos.y + 1.7, this.pos.z);
+      camera.lookAt(camera.position.clone().add(look));
+    }
     // 가까운 건물 안내
     let best = null, bd = 14;
     for (const b of this.w.buildings.list) {

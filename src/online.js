@@ -43,7 +43,7 @@ export class Online {
       this.on = true;
       const me = this.presence.me;
       await this.presence.join('campus', {
-        state: { grade: this.grade(), tool: this.tool || 'bomb' },
+        state: { grade: this.grade(), tool: this.tool || 'bomb', g: this.presence.me.g || '' },
         onPeople: (list) => this.sync(list),
         onEvent: (type, p) => this.event(type, p),
       });
@@ -72,6 +72,7 @@ export class Online {
         if (this.peers.size >= 30) continue; // 너무 많으면 30명까지만 그려요
         peer = this.addPeer(p);
       }
+      if (peer.info && (peer.info.g || '') !== (p.g || '')) { const keep = { pos: peer.pos, target: peer.target, yaw: peer.yaw }; this.dropPeer(peer); peer = this.addPeer(p); Object.assign(peer, keep); peer.g.visible = !!keep.pos; }
       peer.info = p; peer.label.element.firstChild.textContent = `${p.nick}${p.grade ? ` · ${p.grade}학년` : ''}`;
       peer.tool.textContent = TOOL_EMOJI[p.tool] || '';
     }
@@ -80,8 +81,7 @@ export class Online {
   }
 
   addPeer(p) {
-    const month = new Date().getMonth() + 1;
-    const g = makeAvatar(p, uniformFor(this.w.weatherTemp ?? 15, month));
+    const g = makeAvatar(p, this.season());
     g.scale.setScalar(this.w.cats?.real ? 1 : 2.6); // 위에서 볼 땐 잘 보이게
     const el = document.createElement('div'); el.className = 'peer-label';
     el.innerHTML = '<span></span><b></b>';
@@ -94,14 +94,25 @@ export class Online {
 
   makeSelf() {
     if (this.self) return;
-    const me = this.presence.me, month = new Date().getMonth() + 1;
-    const g = makeAvatar(me, uniformFor(this.w.weatherTemp ?? 15, month));
+    const me = this.presence.me;
+    const g = makeAvatar(me, this.season());
     const el = document.createElement('div'); el.className = 'peer-label self';
     el.innerHTML = '<span></span><b></b>';
     el.firstChild.textContent = `나 · ${me.nick}${this.grade() ? ` · ${this.grade()}학년` : ''}`;
     const label = new CSS2DObject(el); label.position.set(0, 2.4, 0); g.add(label);
     this.group.add(g);
     this.self = { g, label, tool: el.querySelector('b'), pos: null, t: 0 };
+  }
+
+  season() { return this.w.uniformNow?.() || uniformFor(undefined, new Date().getMonth() + 1); }
+
+  // 날짜를 옮겼거나 성별을 바꾸면 옷·모습을 다시 그려요
+  refreshLooks(selfOnly) {
+    if (!this.on) return;
+    const sea = this.season();
+    if (this.self && (selfOnly || this.self.g.userData.season !== sea || this.self.g.userData.girl !== (this.presence.me.g === 'f'))) { const pos = this.self.pos; this.dropPeer(this.self); this.self = null; this.makeSelf(); this.self.pos = pos; }
+    if (selfOnly) { this.presence.update('campus', { grade: this.grade(), tool: this.tool || 'bomb', g: this.presence.me.g || '' }); return; }
+    for (const [id, peer] of this.peers) if (peer.g.userData.season !== sea) { const keep = { pos: peer.pos, target: peer.target, yaw: peer.yaw }; this.dropPeer(peer); const np = this.addPeer(peer.info); Object.assign(np, keep); np.g.visible = !!keep.pos; this.peers.set(id, np); }
   }
 
   dropPeer(peer) { peer.label.element.remove(); this.group.remove(peer.g); }
@@ -129,7 +140,7 @@ export class Online {
 
   setTool(tool) {
     this.tool = tool;
-    if (this.on) this.presence.update('campus', { grade: this.grade(), tool });
+    if (this.on) this.presence.update('campus', { grade: this.grade(), tool, g: this.presence.me.g || '' });
   }
 
   // 매 프레임: 내 위치 보내기(0.3초마다, 움직였을 때만) · 아바타 움직이기 · 레이드
@@ -147,19 +158,22 @@ export class Online {
       if (!S.pos) S.pos = tgt.clone();
       const d = S.pos.distanceTo(tgt);
       if (d > 60) S.pos.copy(tgt); else S.pos.lerp(tgt, Math.min(1, dt * 3));
-      if (d > 0.05) S.g.rotation.y = Math.atan2(tgt.x - S.pos.x, tgt.z - S.pos.z) || S.g.rotation.y;
-      S.g.position.copy(S.pos); S.g.visible = !real; // 1인칭에선 내가 카메라라서 숨겨요
-      S.g.scale.setScalar(2.6);
+      if (me.walking) S.g.rotation.y = me.r; else if (d > 0.05) S.g.rotation.y = Math.atan2(tgt.x - S.pos.x, tgt.z - S.pos.z) || S.g.rotation.y;
+      S.g.position.copy(S.pos); S.g.visible = true; // 1인칭(온라인)에선 어깨 너머 시점으로 내 아바타가 보여요
+      S.g.scale.setScalar(real ? 1 : 2.6);
       S.tool.textContent = TOOL_EMOJI[me.tool] || '';
-      S.t += dt * (d > 0.3 ? 1 : 0.3); animateAvatar(S.g, S.t);
+      const mv = me.walking ? Math.min(1, (S.lastP ? Math.hypot(me.x - S.lastP.x, me.z - S.lastP.z) / Math.max(dt, 1e-3) / 3 : 0)) : Math.min(1, d / 2);
+      S.lastP = { x: me.x, z: me.z };
+      S.t += dt; animateAvatar(S.g, S.t, mv);
     }
     for (const peer of this.peers.values()) {
       if (!peer.pos) continue;
+      const sp = peer.pos.distanceTo(peer.target);
       peer.pos.lerp(peer.target, Math.min(1, dt * 4));
       peer.g.position.copy(peer.pos);
       if (peer.yaw !== undefined) peer.g.rotation.y = peer.yaw;
       peer.g.scale.setScalar(real ? 1 : 2.6);
-      peer.t += dt; animateAvatar(peer.g, peer.t);
+      peer.t += dt; animateAvatar(peer.g, peer.t, Math.min(1, sp / 1.5));
     }
     this.raidTick(dt);
   }
