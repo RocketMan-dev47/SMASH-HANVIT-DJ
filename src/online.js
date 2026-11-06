@@ -47,6 +47,7 @@ export class Online {
         onPeople: (list) => this.sync(list),
         onEvent: (type, p) => this.event(type, p),
       });
+      this.makeSelf();
       this.ui.toast('🌐 온라인 켜짐', `${me.nick}${this.grade() ? ` · ${this.grade()}학년` : ''}(으)로 접속했어요`, 'gold');
       this.onBadge?.('online1');
     } else {
@@ -54,6 +55,7 @@ export class Online {
       await this.presence.leave('campus');
       for (const p of this.peers.values()) this.dropPeer(p);
       this.peers.clear(); this.raid = null; this.raidUI(null);
+      if (this.self) { this.dropPeer(this.self); this.self = null; }
       this.ui.toast('온라인 꺼짐', '이제 아무것도 보내지 않아요');
     }
     return this.on;
@@ -90,6 +92,18 @@ export class Online {
     return peer;
   }
 
+  makeSelf() {
+    if (this.self) return;
+    const me = this.presence.me, month = new Date().getMonth() + 1;
+    const g = makeAvatar(me, uniformFor(this.w.weatherTemp ?? 15, month));
+    const el = document.createElement('div'); el.className = 'peer-label self';
+    el.innerHTML = '<span></span><b></b>';
+    el.firstChild.textContent = `나 · ${me.nick}${this.grade() ? ` · ${this.grade()}학년` : ''}`;
+    const label = new CSS2DObject(el); label.position.set(0, 2.4, 0); g.add(label);
+    this.group.add(g);
+    this.self = { g, label, tool: el.querySelector('b'), pos: null, t: 0 };
+  }
+
   dropPeer(peer) { peer.label.element.remove(); this.group.remove(peer.g); }
 
   event(type, p) {
@@ -108,6 +122,7 @@ export class Online {
   emote(e) {
     if (!this.on || !EMOTES.includes(e)) return;
     this.presence.send('campus', 'emo', { e });
+    if (this.self) this.bubble(this.self, e);
     this.hap?.play('tap');
     this.ui.toast(e, '친구들에게 보냈어요');
   }
@@ -127,6 +142,17 @@ export class Online {
       if (moved) { this.presence.send('campus', 'pos', { x: Math.round(me.x * 10) / 10, z: Math.round(me.z * 10) / 10, r: Math.round((me.r || 0) * 100) / 100, tool: me.tool }); this.last = { ...me }; }
     }
     const real = !!this.w.cats?.real;
+    if (this.self && me) {
+      const S = this.self, tgt = new THREE.Vector3(me.x, this.w.terrain.heightAt(me.x, me.z), me.z);
+      if (!S.pos) S.pos = tgt.clone();
+      const d = S.pos.distanceTo(tgt);
+      if (d > 60) S.pos.copy(tgt); else S.pos.lerp(tgt, Math.min(1, dt * 3));
+      if (d > 0.05) S.g.rotation.y = Math.atan2(tgt.x - S.pos.x, tgt.z - S.pos.z) || S.g.rotation.y;
+      S.g.position.copy(S.pos); S.g.visible = !real; // 1인칭에선 내가 카메라라서 숨겨요
+      S.g.scale.setScalar(2.6);
+      S.tool.textContent = TOOL_EMOJI[me.tool] || '';
+      S.t += dt * (d > 0.3 ? 1 : 0.3); animateAvatar(S.g, S.t);
+    }
     for (const peer of this.peers.values()) {
       if (!peer.pos) continue;
       peer.pos.lerp(peer.target, Math.min(1, dt * 4));

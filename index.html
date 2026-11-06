@@ -1219,6 +1219,7 @@
 
   /* ===== 온라인 모드 ===== */
   .peer-label { display: flex; gap: 4px; align-items: center; padding: 3px 8px; border-radius: 999px; background: rgba(16,26,52,0.62); color: #fff; font: 600 10.5px var(--font); white-space: nowrap; pointer-events: none; }
+  .peer-label.self { background: rgba(10,132,255,0.85); }
   .peer-emo { font-size: 26px; animation: emoUp 2.2s var(--ease-out) forwards; pointer-events: none; }
   @keyframes emoUp { from { transform: translateY(8px) scale(0.6); opacity: 0; } 15% { opacity: 1; transform: none; } to { transform: translateY(-24px); opacity: 0; } }
   #raid-bar { position: fixed; top: calc(12px + var(--safe-t)); left: 50%; transform: translateX(-50%); z-index: 6; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 10px; max-width: min(560px, calc(100vw - 24px)); padding: 8px 14px; border-radius: 18px; font: 600 12px var(--font); box-shadow: var(--hair), var(--lift); }
