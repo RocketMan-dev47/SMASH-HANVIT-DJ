@@ -615,6 +615,7 @@ async function start() {
   document.getElementById('btn-block').addEventListener('click', toggleBlock);
   const launcher = new Launcher({ hap, blockUnlocked: () => BlockUnlock.has(), blockOn: () => blockWorld.active, onBlock: toggleBlock, onGame: (id) => world.openGame?.(id),
     online: () => !!world.onlineMode,
+    onAvatar: () => world.pickAvatar?.(),
     onOnline: () => {
       world.setOnline?.(!world.onlineMode).then((on) => { tele.track('online', { on }); launcher.render?.(); });
     } });
@@ -1337,11 +1338,18 @@ async function start() {
     const seg = document.getElementById('set-gender');
     const cur = () => { try { return localStorage.getItem('smash-gender') || ''; } catch { return ''; } };
     const paint = () => { for (const b of seg.querySelectorAll('button')) b.classList.toggle('on', b.dataset.g === cur()); };
-    for (const b of seg.querySelectorAll('button')) b.addEventListener('click', () => {
-      try { localStorage.setItem('smash-gender', b.dataset.g); } catch { /* 무시 */ }
-      presence.me.g = b.dataset.g; paint(); world.online?.refreshLooks(true);
-      ui.toast('아바타', b.dataset.g === 'f' ? '여학생 교복으로 바꿨어요' : '남학생 교복으로 바꿨어요');
-    });
+    world.setGender = (gv) => {
+      try { localStorage.setItem('smash-gender', gv); } catch { /* 무시 */ }
+      presence.me.g = gv; paint(); world.online?.refreshLooks(true);
+      ui.toast('아바타', gv === 'f' ? '여학생으로 바꿨어요 · 1인칭 투어에서 보여요' : '남학생으로 바꿨어요 · 1인칭 투어에서 보여요');
+    };
+    world.hasGender = () => !!cur();
+    for (const b of seg.querySelectorAll('button')) b.addEventListener('click', () => world.setGender(b.dataset.g));
+    // 고르기 창
+    const pick = document.getElementById('av-pick');
+    world.pickAvatar = () => { for (const b of pick.querySelectorAll('[data-g]')) b.classList.toggle('on', b.dataset.g === cur()); ui.modal('av-pick', true); };
+    for (const b of pick.querySelectorAll('[data-g]')) b.addEventListener('click', () => { world.setGender(b.dataset.g); ui.modal('av-pick', false); });
+    document.getElementById('av-close').addEventListener('click', () => ui.modal('av-pick', false));
     if (cur()) presence.me.g = cur();
     paint();
   }
@@ -1394,7 +1402,7 @@ async function start() {
     const today = simDate.toDateString() === new Date().toDateString();
     return uniformFor(today && !wx?.manual ? wx?.temp : undefined, simDate.getMonth() + 1);
   };
-  world.setOnline = async (on) => { const r = await online.setOn(on); world.onlineMode = r; emoteBar.hidden = !r; document.body.classList.toggle('is-online', r); return r; };
+  world.setOnline = async (on) => { const r = await online.setOn(on); world.onlineMode = r; emoteBar.hidden = !r; document.body.classList.toggle('is-online', r); if (r && !world.hasGender?.()) setTimeout(() => world.pickAvatar?.(), 500); return r; };
   world.openGame = (id) => {
     if (id === 'campaign') { launcher.close(true); return openCampaign(); }
     if (!GAMES[id]) return; launcher.close(true); arcade.open(GAMES[id]());
@@ -2346,7 +2354,7 @@ async function start() {
     for (const b of $id('set-quality').querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === gfx.mode);
     $id('set-q-now').textContent = `지금 ${LEVELS[gfx.level].name}`;
     $id('set-install').hidden = !installEvt;
-    $id('set-ver').textContent = `SMASH 한빛 v2.0.3 · 배지 ${badges.list().filter((x) => x.got).length}/${badges.list().length}`;
+    $id('set-ver').textContent = `SMASH 한빛 v2.0.4 · 배지 ${badges.list().filter((x) => x.got).length}/${badges.list().length}`;
   }
   $id('btn-settings').addEventListener('click', () => { syncSettings(); ui.modal('settings', true); });
   $id('set-close').addEventListener('click', () => ui.modal('settings', false));

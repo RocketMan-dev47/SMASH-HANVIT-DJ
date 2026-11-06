@@ -98,11 +98,11 @@ export class Walk {
     this.pos.y = this.pos.y ? this.pos.y + (gy - this.pos.y) * Math.min(1, dt * 10) : gy;
     const look = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch));
     if (this.w.onlineMode) {
-      // 온라인: 내 아바타 어깨 너머로(뒤 3 m, 위 0.6 m)
-      const eye = new THREE.Vector3(this.pos.x, this.pos.y + 1.6, this.pos.z), back = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-      camera.position.copy(eye).addScaledVector(back, -3).add(new THREE.Vector3(0, 0.6, 0));
-      const gy2 = this.w.terrain.heightAt(camera.position.x, camera.position.z); if (camera.position.y < gy2 + 0.6) camera.position.y = gy2 + 0.6;
-      camera.lookAt(eye.clone().addScaledVector(look, 6));
+      // 온라인: 3인칭 게임처럼 오른쪽 어깨 너머(뒤 4.2 m · 위 1.0 m · 옆 0.6 m) → 머리부터 발끝까지 보여요
+      const chest = new THREE.Vector3(this.pos.x, this.pos.y + 1.2, this.pos.z), fwd = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)), right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+      camera.position.copy(chest).addScaledVector(fwd, -4.2).addScaledVector(right, -0.6).add(new THREE.Vector3(0, 1.0 - this.pitch * 1.5, 0));
+      const gy2 = this.w.terrain.heightAt(camera.position.x, camera.position.z); if (camera.position.y < gy2 + 0.5) camera.position.y = gy2 + 0.5;
+      camera.lookAt(chest.clone().addScaledVector(right, -0.6).addScaledVector(look, 8));
     } else {
       camera.position.set(this.pos.x, this.pos.y + 1.7, this.pos.z);
       camera.lookAt(camera.position.clone().add(look));

@@ -29,8 +29,8 @@ export const GROUPS = [
 ];
 
 export class Launcher {
-  constructor({ hap, blockUnlocked, onBlock, blockOn, onGame, online, onOnline }) {
-    this.online = online; this.onOnline = onOnline;
+  constructor({ hap, blockUnlocked, onBlock, blockOn, onGame, online, onOnline, onAvatar }) {
+    this.online = online; this.onOnline = onOnline; this.onAvatar = onAvatar;
     this.onGame = onGame;
     this.hap = hap;
     this.blockUnlocked = blockUnlocked;
@@ -50,7 +50,7 @@ export class Launcher {
   render() {
     const wrap = this.el.querySelector('.lx-wrap');
     const on = this.online?.() || false;
-    wrap.innerHTML = `<header class="lx-head"><b>HASA 앱 보관함</b><button type="button" class="lx-online ${on ? 'on' : ''}" aria-pressed="${on}"><i></i>온라인 ${on ? '켜짐' : '꺼짐'}</button></header><div class="lx-grid">${GROUPS.map((g, gi) => {
+    wrap.innerHTML = `<header class="lx-head"><b>HASA 앱 보관함</b><button type="button" class="lx-online ${on ? 'on' : ''}" aria-pressed="${on}"><i></i>온라인 ${on ? '켜짐' : '꺼짐'}</button>${on ? '<button type="button" class="lx-avatar">아바타</button>' : ''}</header><div class="lx-grid">${GROUPS.map((g, gi) => {
       const items = g.items.filter(([id]) => id !== 'block' || this.blockUnlocked());
       return `<section class="lx-card" style="--gi:${gi}"><h3>${g.name}</h3><div class="lx-tiles">${items.map(([id, name], ti) => {
         const src = document.getElementById(id);
@@ -63,6 +63,7 @@ export class Launcher {
       }).join('')}</div></section>`;
     }).join('')}</div>`;
     wrap.querySelector('.lx-online').addEventListener('click', (e) => { e.stopPropagation(); this.onOnline?.(); this.render(); });
+    wrap.querySelector('.lx-avatar')?.addEventListener('click', (e) => { e.stopPropagation(); this.close(true); this.onAvatar?.(); });
     for (const t of wrap.querySelectorAll('.lx-tile')) {
       t.addEventListener('click', (e) => {
         e.stopPropagation();

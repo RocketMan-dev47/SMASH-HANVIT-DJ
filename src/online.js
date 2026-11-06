@@ -48,7 +48,7 @@ export class Online {
         onEvent: (type, p) => this.event(type, p),
       });
       this.makeSelf();
-      this.ui.toast('🌐 온라인 켜짐', `${me.nick}${this.grade() ? ` · ${this.grade()}학년` : ''}(으)로 접속했어요`, 'gold');
+      this.ui.toast('🌐 온라인 켜짐', `${me.nick}${this.grade() ? ` · ${this.grade()}학년` : ''}(으)로 접속했어요 · 아바타는 1인칭 투어에서 보여요`, 'gold');
       this.onBadge?.('online1');
     } else {
       this.on = false;
@@ -119,7 +119,7 @@ export class Online {
 
   event(type, p) {
     const peer = this.peers.get(p.from?.id);
-    if (type === 'pos' && peer) { peer.target.set(p.x, this.w.terrain.heightAt(p.x, p.z), p.z); peer.yaw = p.r; if (!peer.pos) { peer.pos = peer.target.clone(); peer.g.visible = true; } if (p.tool) peer.tool.textContent = TOOL_EMOJI[p.tool] || ''; }
+    if (type === 'pos' && peer) { peer.target.set(p.x, this.w.terrain.heightAt(p.x, p.z), p.z); peer.yaw = p.r; if (!peer.pos) { peer.pos = peer.target.clone(); } if (p.tool) peer.tool.textContent = TOOL_EMOJI[p.tool] || ''; }
     else if (type === 'emo' && peer && EMOTES.includes(p.e)) this.bubble(peer, p.e);
     else if (type === 'rh' && this.raid && p.id === this.raid.id) { this.raid.total = Math.min(this.raid.hp, this.raid.total + Math.min(60000, Number(p.d) || 0)); this.raidUI(this.raid); }
   }
@@ -158,9 +158,13 @@ export class Online {
       if (!S.pos) S.pos = tgt.clone();
       const d = S.pos.distanceTo(tgt);
       if (d > 60) S.pos.copy(tgt); else S.pos.lerp(tgt, Math.min(1, dt * 3));
-      if (me.walking) S.g.rotation.y = me.r; else if (d > 0.05) S.g.rotation.y = Math.atan2(tgt.x - S.pos.x, tgt.z - S.pos.z) || S.g.rotation.y;
-      S.g.position.copy(S.pos); S.g.visible = true; // 1인칭(온라인)에선 어깨 너머 시점으로 내 아바타가 보여요
-      S.g.scale.setScalar(real ? 1 : 2.6);
+      // 가는 방향으로 몸을 돌려 걸어요(옆·뒤로 가도 자연스럽게). 멈추면 바라보는 쪽으로
+      const mvx = S.lastP ? me.x - S.lastP.x : 0, mvz = S.lastP ? me.z - S.lastP.z : 0, moving = Math.hypot(mvx, mvz) > 0.004;
+      const want = moving ? Math.atan2(mvx, mvz) : (me.walking ? me.r : S.g.rotation.y);
+      let dy = want - S.g.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      S.g.rotation.y += dy * Math.min(1, dt * 10);
+      S.g.position.copy(S.pos); S.g.visible = real; S.label.visible = real; // 1인칭 투어에서만 보여요
+      S.g.scale.setScalar(1);
       S.tool.textContent = TOOL_EMOJI[me.tool] || '';
       const mv = me.walking ? Math.min(1, (S.lastP ? Math.hypot(me.x - S.lastP.x, me.z - S.lastP.z) / Math.max(dt, 1e-3) / 3 : 0)) : Math.min(1, d / 2);
       S.lastP = { x: me.x, z: me.z };
@@ -171,8 +175,9 @@ export class Online {
       const sp = peer.pos.distanceTo(peer.target);
       peer.pos.lerp(peer.target, Math.min(1, dt * 4));
       peer.g.position.copy(peer.pos);
-      if (peer.yaw !== undefined) peer.g.rotation.y = peer.yaw;
-      peer.g.scale.setScalar(real ? 1 : 2.6);
+      peer.g.visible = real; peer.label.visible = real; // 친구 아바타도 1인칭 투어에서만
+      if (sp > 0.05) { let dy = Math.atan2(peer.target.x - peer.pos.x, peer.target.z - peer.pos.z) - peer.g.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); peer.g.rotation.y += dy * Math.min(1, dt * 8); } else if (peer.yaw !== undefined) { let dy = peer.yaw - peer.g.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); peer.g.rotation.y += dy * Math.min(1, dt * 4); }
+      peer.g.scale.setScalar(1);
       peer.t += dt; animateAvatar(peer.g, peer.t, Math.min(1, sp / 1.5));
     }
     this.raidTick(dt);
