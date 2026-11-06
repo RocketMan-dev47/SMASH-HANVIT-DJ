@@ -71,7 +71,8 @@ export class SchoolNet {
     const u0 = this.cfg.bus?.liveUrl;
     if (!u0) return null;
     const u = ars ? `${u0}${u0.includes('?') ? '&' : '?'}stop=${encodeURIComponent(ars)}` : u0;
-    const r = await fetch(u, { headers: this.online ? (String(this.key).startsWith('sb_') ? { apikey: this.key } : { Authorization: `Bearer ${this.key}` }) : {} });
+    // 중계 함수는 키 없이 부르는 공개 함수(--no-verify-jwt)라 머리글 없이 보내요. 머리글을 붙이면 브라우저 사전 확인(CORS) 때문에 막힐 수 있어요
+    const r = await fetch(u);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return r.json(); // [{ no, min, stops, low }]
   }
